@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package com.maiload.messagereceiver.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.maiload.messagereceiver.grpc";
+option java_outer_classname = "RealtimeMessageProto";
+
+import "google/protobuf/timestamp.proto";
+
+service RealtimeMessageService {
+  rpc Submit(SubmitRequest) returns (SubmitResponse);
+  rpc GetReceiptStatus(GetReceiptStatusRequest) returns (GetReceiptStatusResponse);
+}
+
+message SubmitRequest {
+  string customer_id = 1;
+  string customer_message_id = 2;
+  MessageType message_type = 3;
+  string recipient = 4;
+  string template_id = 5;
+  string content = 6;
+  map<string, string> vars = 7;
+  int32 ttl_seconds = 8;
+  repeated string media_urls = 9;
+}
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  SMS = 1;
+  LMS = 2;
+  MMS = 3;
+}
+
+message SubmitResponse {
+  string receipt_id = 1;
+  google.protobuf.Timestamp accepted_at = 2;
+  bool idempotency_hit = 3;
+}
+
+message GetReceiptStatusRequest {
+  string customer_id = 1;
+  string receipt_id = 2;
+}
+
+message GetReceiptStatusResponse {
+  string receipt_id = 1;
+  string customer_message_id = 2;
+  MessageStatus status = 3;
+  string fail_code = 4;
+  string fail_reason = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+  google.protobuf.Timestamp sent_at = 7;
+  google.protobuf.Timestamp delivered_at = 8;
+}
+
+enum MessageStatus {
+  MESSAGE_STATUS_UNSPECIFIED = 0;
+  RECEIVED = 1;
+  QUEUED = 2;
+  PROCESSING = 3;
+  SENT = 4;
+  DELIVERED = 5;
+  FAILED = 6;
+  EXPIRED = 7;
+}

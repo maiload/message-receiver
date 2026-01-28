@@ -27,7 +27,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
     // Rate Limiting
-    implementation 'com.bucket4j:bucket4j-redis:8.10.1'
+    implementation("com.bucket4j:bucket4j_jdk17-redis-common:8.16.0")
+    implementation("com.bucket4j:bucket4j_jdk17-lettuce:8.16.0")
 
     // Database
     implementation 'org.springframework.boot:spring-boot-starter-jooq'
