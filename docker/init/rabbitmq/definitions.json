@@ -1,0 +1,55 @@
+{
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "exchanges": [
+    {
+      "name": "message.exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "message.dlx",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "queues": [
+    {
+      "name": "message.realtime.queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "message.dlx",
+        "x-dead-letter-routing-key": "message.realtime.dlq"
+      }
+    },
+    {
+      "name": "message.realtime.dlq",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false
+    }
+  ],
+  "bindings": [
+    {
+      "source": "message.exchange",
+      "vhost": "/",
+      "destination": "message.realtime.queue",
+      "destination_type": "queue",
+      "routing_key": "message.realtime"
+    },
+    {
+      "source": "message.dlx",
+      "vhost": "/",
+      "destination": "message.realtime.dlq",
+      "destination_type": "queue",
+      "routing_key": "message.realtime.dlq"
+    }
+  ]
+}
