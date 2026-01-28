@@ -29,14 +29,4 @@ public final class PhoneNumberUtils {
             return phoneNumber;
         }
     }
-
-    public static String toNational(String phoneNumber) {
-        try {
-            PhoneNumber parsed = PHONE_UTIL.parse(phoneNumber, DEFAULT_REGION);
-            return PHONE_UTIL.format(parsed, PhoneNumberUtil.PhoneNumberFormat.NATIONAL)
-                    .replaceAll("[^0-9]", "");
-        } catch (NumberParseException e) {
-            return phoneNumber;
-        }
-    }
 }

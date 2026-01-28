@@ -11,8 +11,4 @@ public final class IdGenerator {
     public static String uuid() {
         return UUID.randomUUID().toString();
     }
-
-    public static String compactUuid() {
-        return UUID.randomUUID().toString().replace("-", "");
-    }
 }
