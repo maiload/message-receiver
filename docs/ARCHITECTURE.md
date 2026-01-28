@@ -9,11 +9,11 @@
 | Java | 21 | 메인 언어 |
 | Spring Boot | 4.0.2 | 프레임워크 |
 | Gradle | Groovy DSL | 빌드 |
-| gRPC | grpc-spring-boot-starter 3.x | Realtime API |
+| gRPC | spring-grpc 1.x | Realtime API |
 | RabbitMQ | Spring AMQP | 실시간 메시지 큐 |
 | Kafka | Spring Kafka | Bulk/CDR 이벤트 |
 | Redis | Lettuce | 멱등성, Rate Limit |
-| PostgreSQL | 16 | CDR 저장소 |
+| PostgreSQL | 17 | CDR 저장소 |
 | MinIO | S3 호환 | Bulk 파일 저장 |
 
 ### 1.2 라이브러리
@@ -75,21 +75,15 @@ message-receiver/
 
 ### 3.2 헥사고날 아키텍처 (receiver, worker)
 
-핵심 도메인 로직이 있고, 외부 의존성이 다양한 모듈에 적용
+외부 의존성이 다양한 모듈에 적용
 
 ```
-<module>/{domain}
-├── domain/
-│   ├── model/          # Entity, Value Object
-│   ├── policy/         # 도메인 규칙
-│   └── event/          # 도메인 이벤트
+<module>/
 ├── application/
-│   ├── usecase/        # UseCase 인터페이스/구현
-│   ├── command/        # Write DTO
-│   └── mapper/         # 도메인 ↔ DTO
-├── port/
-│   ├── in/             # UseCase 인터페이스
-│   └── out/            # 외부 의존 인터페이스
+│   ├── port/
+│   │   ├── in/         # Inbound Port 인터페이스 (+ 내부 DTO record)
+│   │   └── out/        # Outbound Port 인터페이스
+│   └── service/        # Inbound Port 구현체
 └── adapter/
     ├── in/             # gRPC, REST, Consumer
     └── out/            # Redis, MQ, Kafka, DB
@@ -124,14 +118,45 @@ ETL/배치 성격의 모듈에 적용. 과잉 설계 방지.
 | 저장소 | `{도메인}RepositoryPort` | `Jooq{도메인}RepositoryAdapter` |
 | 외부 API | `{대상}GatewayPort` | `Http{대상}GatewayAdapter` |
 
-### 4.2 UseCase
+### 4.2 Inbound Port & Service
 
-**규칙**: `{동사}{목적어}UseCase`
+**Port 규칙**: `{도메인}Port`
+**Service 규칙**: `{도메인}Service`
+**DTO 규칙**: Port 인터페이스 내부에 `{동사}`, `{동사}Result` record로 정의
 
 ```
-SubmitRealtimeMessageUseCase
-ConsumeRealtimeTaskUseCase
-WriteCdrBatchUseCase
+# application/port/in/
+RealtimeMessagePort             # submit(), cancel(), getStatus()...
+
+# application/service/
+RealtimeMessageService (implements RealtimeMessagePort)
+```
+
+### 4.3 Port 내부 DTO 예시
+
+```java
+public interface RealtimeMessagePort {
+
+    SubmitResult submit(Submit submit);
+
+    record Submit(
+        String customerId,
+        String customerMessageId,
+        String messageType,
+        String recipient,
+        String templateId,
+        String content,
+        Map<String, String> vars,
+        Integer ttlSeconds,
+        List<String> mediaUrls
+    ) {}
+
+    record SubmitResult(
+        String receiptId,
+        Instant acceptedAt,
+        boolean idempotencyHit
+    ) {}
+}
 ```
 
 ---
@@ -229,7 +254,7 @@ cdr-writer:
 
 | 레이어 | 범위 | 도구 |
 |--------|------|------|
-| Unit | domain policy, usecase 로직 | JUnit 5, Mockito |
+| Unit | Service 로직, 유틸리티 | JUnit 5, Mockito |
 | Integration | Adapter 단위 | Testcontainers |
 | E2E | 전체 흐름 (선택) | Docker Compose |
 
@@ -313,21 +338,56 @@ subprojects {
 ```groovy
 plugins {
     id 'org.springframework.boot'
+    id 'com.google.protobuf' version '0.9.5'
+    id 'nu.studer.jooq' version '10.2'
+}
+
+ext {
+    set('springGrpcVersion', '1.0.1')
 }
 
 dependencies {
     implementation project(':common')
-    implementation 'org.springframework.boot:spring-boot-starter'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'net.devh:grpc-spring-boot-starter:3.1.0.RELEASE'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation 'org.springframework.boot:spring-boot-starter-amqp'
-    implementation 'com.bucket4j:bucket4j-redis:8.10.1'
-    implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'io.micrometer:micrometer-registry-prometheus'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // gRPC
+    implementation 'io.grpc:grpc-services'
+    implementation 'org.springframework.grpc:spring-grpc-server-web-spring-boot-starter'
+
+    // Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // RabbitMQ
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
+    // Rate Limiting
+    implementation 'com.bucket4j:bucket4j-redis:8.10.1'
+
+    // Database
+    implementation 'org.springframework.boot:spring-boot-starter-jooq'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Observability
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-amqp-test'
+    testImplementation 'org.springframework.grpc:spring-grpc-test'
     testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.grpc:spring-grpc-dependencies:${springGrpcVersion}"
+    }
 }
 ```
 

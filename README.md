@@ -6,7 +6,7 @@
 
 | 모듈 | 설명 |
 |------|------|
-| `common` | 공통 도메인, 예외, 유틸리티 |
+| `common` | 공통 예외, 유틸리티 |
 | `receiver` | gRPC/REST API 진입점 |
 | `worker` | MQ Consumer + Gateway 발송 |
 | `cdr-writer` | CDR 이벤트 소비 + DB 적재 |
@@ -16,7 +16,7 @@
 
 - Java 21
 - Spring Boot 4.0.2
-- gRPC
+- Spring gRPC 1.x
 - RabbitMQ, Kafka
-- PostgreSQL, Redis, MinIO
-- jOOQ, Flyway
+- PostgreSQL 17, Redis, MinIO
+- jOOQ 3.20, Flyway

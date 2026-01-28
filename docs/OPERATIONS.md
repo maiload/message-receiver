@@ -16,76 +16,76 @@
 | 서비스 | 이미지 | 포트 |
 |--------|--------|------|
 | redis | redis:7-alpine | 6379 |
-| rabbitmq | rabbitmq:3-management-alpine | 5672, 15672 |
-| kafka | confluentinc/cp-kafka:7.6.0 | 9092 |
-| postgres | postgres:16-alpine | 5432 |
+| rabbitmq | rabbitmq:4-management | 5672, 15672 |
+| kafka | apache/kafka:3.9.0 | 9094 |
+| postgres | postgres:17 | 5432 |
 | minio | minio/minio:latest | 9000, 9001 |
+| kafka-ui | provectuslabs/kafka-ui:latest | 8080 |
 
 ### 1.3 docker-compose.yml
 
 ```yaml
-version: '3.8'
-
 services:
+  postgres:
+    image: postgres:17
+    container_name: message-receiver-postgres
+    environment:
+      POSTGRES_USER: maiload
+      POSTGRES_PASSWORD: maiload
+      POSTGRES_DB: message_receiver
+    ports:
+      - "5432:5432"
+
   redis:
     image: redis:7-alpine
-    container_name: mr-redis
+    container_name: message-receiver-redis
     ports:
       - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: mr-rabbitmq
+    image: rabbitmq:4-management
+    container_name: message-receiver-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: maiload
+      RABBITMQ_DEFAULT_PASS: maiload
     ports:
       - "5672:5672"
       - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    volumes:
-      - ./init/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
-      - ./init/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
 
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: mr-kafka
-    ports:
-      - "9092:9092"
+    image: apache/kafka:3.9.0
+    container_name: message-receiver-kafka
     environment:
       KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: mr-postgres
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: messagereceiver
-      POSTGRES_PASSWORD: messagereceiver
-      POSTGRES_DB: messagereceiver
-    volumes:
-      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+      - "9094:9094"
 
   minio:
     image: minio/minio:latest
-    container_name: mr-minio
+    container_name: message-receiver-minio
+    environment:
+      MINIO_ROOT_USER: maiload
+      MINIO_ROOT_PASSWORD: maiload123
+    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: message-receiver-kafka-ui
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8080:8080"
 ```
 
 ### 1.4 실행 방법
@@ -96,11 +96,11 @@ cd docker
 docker-compose up -d
 
 # Kafka 토픽 생성
-docker exec mr-kafka kafka-topics --create \
+docker exec message-receiver-kafka /opt/kafka/bin/kafka-topics.sh --create \
   --bootstrap-server localhost:9092 \
   --topic bulk.send.task --partitions 6 --if-not-exists
 
-docker exec mr-kafka kafka-topics --create \
+docker exec message-receiver-kafka /opt/kafka/bin/kafka-topics.sh --create \
   --bootstrap-server localhost:9092 \
   --topic cdr.events --partitions 6 --if-not-exists
 
@@ -114,8 +114,9 @@ docker exec mr-kafka kafka-topics --create \
 
 | 서비스 | URL | 계정 |
 |--------|-----|------|
-| RabbitMQ | http://localhost:15672 | guest / guest |
-| MinIO | http://localhost:9001 | minioadmin / minioadmin |
+| RabbitMQ | http://localhost:15672 | maiload / maiload |
+| MinIO | http://localhost:9001 | maiload / maiload123 |
+| Kafka UI | http://localhost:8080 | - |
 
 ---
 
