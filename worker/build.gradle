@@ -10,7 +10,7 @@ dependencies {
     implementation project(':common')
 
     // Spring Boot
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // RabbitMQ
@@ -18,9 +18,6 @@ dependencies {
 
     // Kafka
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
-
-    // HTTP Client (Gateway)
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
     // Resilience
     implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
