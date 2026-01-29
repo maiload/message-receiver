@@ -1,3 +1,6 @@
+-- 스키마 생성
+CREATE SCHEMA IF NOT EXISTS messaging;
+
 -- customers 테이블
 CREATE TABLE messaging.customers (
     id                  BIGSERIAL PRIMARY KEY,

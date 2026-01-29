@@ -7,6 +7,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ErrorCode {
 
+    // Authentication
+    UNAUTHENTICATED("A001", false),
+    PERMISSION_DENIED("A002", false),
+    API_KEY_EXPIRED("A003", false),
+
     // Validation
     INVALID_REQUEST("V001", false),
     INVALID_RECIPIENT("V002", false),

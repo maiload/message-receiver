@@ -29,6 +29,14 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
     @Override
     public void submit(SubmitRequest request, StreamObserver<SubmitResponse> responseObserver) {
         try {
+            String authenticatedCustomerId = AuthenticationInterceptor.CUSTOMER_ID_CTX_KEY.get();
+            if (!request.getCustomerId().equals(authenticatedCustomerId)) {
+                responseObserver.onError(Status.PERMISSION_DENIED
+                        .withDescription("Customer ID mismatch")
+                        .asRuntimeException());
+                return;
+            }
+
             RealtimeMessagePort.SubmitResult result = realtimeMessagePort.submit(toSubmit(request));
             responseObserver.onNext(toResponse(result));
             responseObserver.onCompleted();
@@ -78,6 +86,10 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
 
     private Status toGrpcStatus(ErrorCode errorCode) {
         return switch (errorCode) {
+            case UNAUTHENTICATED, API_KEY_EXPIRED ->
+                    Status.UNAUTHENTICATED;
+            case PERMISSION_DENIED ->
+                    Status.PERMISSION_DENIED;
             case INVALID_REQUEST, INVALID_RECIPIENT, INVALID_TEMPLATE ->
                     Status.INVALID_ARGUMENT;
             case TEMPLATE_NOT_FOUND ->
