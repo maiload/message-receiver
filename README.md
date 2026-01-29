@@ -19,4 +19,4 @@
 - Spring gRPC 1.x
 - RabbitMQ, Kafka
 - PostgreSQL 17, Redis, MinIO
-- jOOQ 3.20, Flyway
+- jOOQ 3.19.29, Flyway

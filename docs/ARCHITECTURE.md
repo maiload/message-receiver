@@ -9,7 +9,7 @@
 | Java | 21 | 메인 언어 |
 | Spring Boot | 4.0.2 | 프레임워크 |
 | Gradle | Groovy DSL | 빌드 |
-| gRPC | spring-grpc 1.x | Realtime API |
+| gRPC | spring-grpc 1.0.1 | Realtime API |
 | RabbitMQ | Spring AMQP | 실시간 메시지 큐 |
 | Kafka | Spring Kafka | Bulk/CDR 이벤트 |
 | Redis | Lettuce | 멱등성, Rate Limit |
@@ -18,14 +18,14 @@
 
 ### 1.2 라이브러리
 
-| 라이브러리 | 용도 |
-|-----------|------|
-| Bucket4j | Rate Limiting (Token Bucket) |
-| Resilience4j | Circuit Breaker, Timeout |
-| jOOQ | 배치 DB 접근 |
-| libphonenumber | 전화번호 검증 |
-| Micrometer + Prometheus | 메트릭 |
-| OpenTelemetry SDK | 분산 추적 |
+| 라이브러리 | 버전 | 용도 |
+|-----------|------|------|
+| Bucket4j | 8.16.0 | Rate Limiting (Token Bucket) |
+| Resilience4j | - | Circuit Breaker, Timeout |
+| jOOQ | 3.19.29 | DB 접근 (forcedType + EnumConverter) |
+| libphonenumber | - | 전화번호 검증 |
+| Micrometer + Prometheus | - | 메트릭 |
+| Flyway | - | DB 마이그레이션 |
 
 ---
 
@@ -49,16 +49,14 @@ message-receiver/
                     ┌─────────────┐
                     │   common    │
                     └──────┬──────┘
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-    │  receiver   │ │   worker    │ │ cdr-writer  │
-    └─────────────┘ └─────────────┘ └─────────────┘
-           │
-    ┌──────▼──────┐
-    │ orchestrator│
-    └─────────────┘
+           ┌───────────┬───┴───┬───────────┐
+           ▼           ▼       ▼           ▼
+    ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐
+    │ receiver │ │  worker  │ │cdr-writer│ │ orchestrator │
+    └──────────┘ └──────────┘ └──────────┘ └──────────────┘
 ```
+
+> 모든 서브모듈은 `common`에만 의존합니다. 서브모듈 간 직접 의존은 없습니다.
 
 ---
 
@@ -126,10 +124,12 @@ ETL/배치 성격의 모듈에 적용. 과잉 설계 방지.
 
 ```
 # application/port/in/
-RealtimeMessagePort             # submit(), cancel(), getStatus()...
+RealtimeMessagePort             # submit(), getReceiptStatus()
+BulkJobPort                     # create(), getStatus()
 
 # application/service/
 RealtimeMessageService (implements RealtimeMessagePort)
+BulkJobService (implements BulkJobPort)
 ```
 
 ### 4.3 Port 내부 DTO 예시
@@ -138,6 +138,8 @@ RealtimeMessageService (implements RealtimeMessagePort)
 public interface RealtimeMessagePort {
 
     SubmitResult submit(Submit submit);
+
+    ReceiptStatus getReceiptStatus(String customerId, String receiptId);
 
     record Submit(
         String customerId,
@@ -153,17 +155,58 @@ public interface RealtimeMessagePort {
 
     record SubmitResult(
         String receiptId,
-        Instant acceptedAt,
+        LocalDateTime acceptedAt,
         boolean idempotencyHit
+    ) {}
+
+    record ReceiptStatus(
+        String receiptId,
+        String customerMessageId,
+        MessageStatus status,
+        String failCode,
+        String failReason,
+        LocalDateTime acceptedAt,
+        LocalDateTime sentAt,
+        LocalDateTime finalizedAt
     ) {}
 }
 ```
 
 ---
 
-## 5. 예외 처리
+## 5. 도메인 타입
 
-### 5.1 예외 계층
+### 5.1 도메인 Enum (common 모듈)
+
+모든 상태값은 `common` 모듈에 enum으로 정의하여 타입 안전성을 보장합니다.
+
+| Enum | 값 | 용도 |
+|------|-----|------|
+| `ChannelType` | SMS, LMS, MMS | 메시지 채널 (maxLength 포함) |
+| `SendType` | REALTIME, BULK | 발송 유형 |
+| `MessageStatus` | SENT, FAILED | 발송 결과 |
+| `JobStatus` | PENDING, PROCESSING, PUBLISHED, DELIVERED, FAILED | Bulk Job 상태 |
+
+### 5.2 경계(Boundary)별 변환 전략
+
+| 경계 | 변환 방식 |
+|------|----------|
+| DB (jOOQ) | `forcedType` + `EnumConverter` → 자동 변환 (VARCHAR ↔ Enum) |
+| JSON (Kafka/RabbitMQ) | Jackson 자동 직렬화/역직렬화 (`enum.name()` ↔ `Enum.valueOf()`) |
+| gRPC (Protobuf) | Adapter에서 명시적 매핑 (Proto enum ↔ Domain enum) |
+
+> Proto는 자체 타입을 생성하므로 common enum을 직접 사용할 수 없습니다.
+> 예: `DeliveryStatus` (proto) ↔ `MessageStatus` (domain)
+
+### 5.3 시간 타입
+
+모든 시간 필드는 `LocalDateTime`으로 통일합니다 (Port DTO, DB, 내부 로직 모두 동일).
+
+---
+
+## 6. 예외 처리
+
+### 6.1 예외 계층
 
 ```
 BaseException (extends RuntimeException)
@@ -176,13 +219,22 @@ BaseException (extends RuntimeException)
     └── GatewayException
 ```
 
-### 5.2 ErrorCode Enum
+### 6.2 ErrorCode Enum
 
 ```java
 public enum ErrorCode {
+    // Authentication
+    UNAUTHENTICATED("A001", false),
+    PERMISSION_DENIED("A002", false),
+    API_KEY_EXPIRED("A003", false),
+
     // Validation
     INVALID_REQUEST("V001", false),
-    INVALID_RECIPIENT("V003", false),
+    INVALID_RECIPIENT("V002", false),
+    INVALID_TEMPLATE("V003", false),
+    TEMPLATE_NOT_FOUND("V004", false),
+    RECEIPT_NOT_FOUND("V005", false),
+    JOB_NOT_FOUND("V006", false),
 
     // Policy
     RATE_LIMIT_EXCEEDED("P001", true),
@@ -191,6 +243,8 @@ public enum ErrorCode {
     // Infrastructure
     REDIS_CONNECTION_FAILED("I001", true),
     MQ_PUBLISH_FAILED("I002", true),
+    KAFKA_PUBLISH_FAILED("I003", true),
+    DB_CONNECTION_FAILED("I004", true),
 
     // Gateway
     GATEWAY_TIMEOUT("G001", true),
@@ -204,9 +258,9 @@ public enum ErrorCode {
 
 ---
 
-## 6. 설정 관리
+## 7. 설정 관리
 
-### 6.1 Profile
+### 7.1 Profile
 
 | Profile | 용도 | 인프라 |
 |---------|------|--------|
@@ -215,7 +269,7 @@ public enum ErrorCode {
 | `staging` | 스테이징 | 스테이징 인프라 |
 | `prod` | 운영 | 운영 인프라 |
 
-### 6.2 주요 설정값
+### 7.2 주요 설정값
 
 ```yaml
 receiver:
@@ -248,29 +302,21 @@ cdr-writer:
 
 ---
 
-## 7. 테스트 전략
+## 8. 테스트 전략
 
-### 7.1 테스트 레이어
+### 8.1 테스트 레이어
 
 | 레이어 | 범위 | 도구 |
 |--------|------|------|
 | Unit | Service 로직, 유틸리티 | JUnit 5, Mockito |
-| Integration | Adapter 단위 | Testcontainers |
+| Integration | Adapter 단위 | Spring Boot Test |
 | E2E | 전체 흐름 (선택) | Docker Compose |
-
-### 7.2 Testcontainers 대상
-
-- Redis
-- RabbitMQ
-- Kafka
-- PostgreSQL
-- MinIO
 
 ---
 
-## 8. 로깅 & 추적
+## 9. 로깅 & 추적
 
-### 8.1 MDC 표준 키
+### 9.1 MDC 표준 키
 
 | 키 | 설명 | 필수 |
 |----|------|------|
@@ -279,7 +325,7 @@ cdr-writer:
 | `receiptId` | 영수증 ID | - |
 | `jobId` | Job ID (Bulk) | - |
 
-### 8.2 로그 레벨 가이드
+### 9.2 로그 레벨 가이드
 
 | 레벨 | 용도 |
 |------|------|
@@ -290,9 +336,9 @@ cdr-writer:
 
 ---
 
-## 9. Gradle 설정
+## 10. Gradle 설정
 
-### 9.1 settings.gradle
+### 10.1 settings.gradle
 
 ```groovy
 rootProject.name = 'message-receiver'
@@ -304,13 +350,13 @@ include 'cdr-writer'
 include 'orchestrator'
 ```
 
-### 9.2 build.gradle (루트)
+### 10.2 build.gradle (루트)
 
 ```groovy
 plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.2' apply false
-    id 'io.spring.dependency-management' version '1.1.4' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
 }
 
 allprojects {
@@ -327,13 +373,38 @@ subprojects {
     apply plugin: 'io.spring.dependency-management'
 
     java {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.2'
+        }
+    }
+
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    dependencies {
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
     }
 }
 ```
 
-### 9.3 receiver/build.gradle
+### 10.3 receiver/build.gradle
 
 ```groovy
 plugins {
@@ -350,7 +421,6 @@ dependencies {
     implementation project(':common')
 
     // Spring Boot
-    implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
@@ -365,13 +435,15 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
     // Rate Limiting
-    implementation 'com.bucket4j:bucket4j-redis:8.10.1'
+    implementation 'com.bucket4j:bucket4j_jdk17-redis-common:8.16.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-lettuce:8.16.0'
 
     // Database
     implementation 'org.springframework.boot:spring-boot-starter-jooq'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
+    jooqGenerator 'org.postgresql:postgresql:42.7.8'
 
     // Observability
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -380,8 +452,6 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-amqp-test'
     testImplementation 'org.springframework.grpc:spring-grpc-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
 }
 
 dependencyManagement {
@@ -391,7 +461,59 @@ dependencyManagement {
 }
 ```
 
+### 10.4 jOOQ forcedType 설정
+
+모든 DB 접근 모듈(receiver, cdr-writer, orchestrator)에 동일하게 적용됩니다.
+
+```groovy
+jooq {
+    version = '3.19.29'
+    edition = nu.studer.gradle.jooq.JooqEdition.OSS
+
+    configurations {
+        main {
+            generateSchemaSourceOnCompilation = false
+
+            generationTool {
+                // ...jdbc 설정 생략...
+                generator {
+                    database {
+                        name = 'org.jooq.meta.postgres.PostgresDatabase'
+                        inputSchema = 'messaging'
+                        forcedTypes {
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.JobStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.bulk_jobs\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.MessageStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.SendType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.send_type'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.ChannelType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.channel'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+> `forcedType` + `enumConverter = true`로 jOOQ가 `EnumConverter`를 생성합니다.
+> 이를 통해 Repository에서 `.name()`/`valueOf()` 변환 없이 enum을 직접 사용할 수 있습니다.
+
 ---
 
-*문서 버전: 2.0*
-*최종 수정일: 2025-01-28*
+*문서 버전: 3.0*
+*최종 수정일: 2025-01-29*

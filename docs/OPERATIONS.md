@@ -35,12 +35,27 @@ services:
       POSTGRES_DB: message_receiver
     ports:
       - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maiload -d message_receiver"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: message-receiver-redis
     ports:
       - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -51,6 +66,15 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - ./data/rabbitmq:/var/lib/rabbitmq
+      - ./init/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./init/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka:
     image: apache/kafka:3.9.0
@@ -63,9 +87,20 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
     ports:
       - "9094:9094"
+    volumes:
+      - ./data/kafka:/var/lib/kafka/data
+      - ./init/kafka:/opt/kafka/init
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -77,6 +112,13 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -86,6 +128,9 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
     ports:
       - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
 ```
 
 ### 1.4 실행 방법
@@ -108,6 +153,7 @@ docker exec message-receiver-kafka /opt/kafka/bin/kafka-topics.sh --create \
 ./gradlew :receiver:bootRun --args='--spring.profiles.active=local'
 ./gradlew :worker:bootRun --args='--spring.profiles.active=local'
 ./gradlew :cdr-writer:bootRun --args='--spring.profiles.active=local'
+./gradlew :orchestrator:bootRun --args='--spring.profiles.active=local'
 ```
 
 ### 1.5 관리 UI
@@ -261,40 +307,41 @@ Main Queue ──실패──▶ Retry-5s ──TTL──▶ Main Queue
 
 ### Phase 1: 기반 구축
 
-- [ ] Gradle 멀티모듈 설정
-- [ ] Docker Compose + 인프라
-- [ ] common 모듈 (예외, 유틸리티, PiiMasker)
-- [ ] DB 스키마 (Flyway)
+- [x] Gradle 멀티모듈 설정
+- [x] Docker Compose + 인프라
+- [x] common 모듈 (예외, 유틸리티, PiiMasker)
+- [x] DB 스키마 (Flyway)
 
 ### Phase 2: Realtime MVP
 
-- [ ] gRPC Submit API
-- [ ] 멱등성 검사 (Redis)
-- [ ] Rate Limit (Bucket4j)
-- [ ] RabbitMQ 발행
-- [ ] API Key 인증 + 만료 검사
+- [x] gRPC Submit API
+- [x] 멱등성 검사 (Redis)
+- [x] Rate Limit (Bucket4j)
+- [x] RabbitMQ 발행
+- [x] API Key 인증 + 만료 검사
 
 ### Phase 3: Worker + Gateway
 
-- [ ] RabbitMQ Consumer
-- [ ] Gateway 호출 (Mock)
-- [ ] Resilience4j (Timeout, CircuitBreaker)
-- [ ] 재시도/DLQ
-- [ ] cdr.events Kafka 발행 (동기 + 로컬 재시도)
+- [x] RabbitMQ Consumer
+- [x] Gateway 호출 (Mock)
+- [x] Resilience4j (Timeout, CircuitBreaker)
+- [x] 재시도/DLQ
+- [x] cdr.events Kafka 발행 (동기 + 로컬 재시도)
 
 ### Phase 4: CDR Writer
 
-- [ ] Kafka Consumer
-- [ ] 마이크로 배치 (5000건 or 5초)
-- [ ] jOOQ 배치 삽입
-- [ ] ON CONFLICT DO NOTHING
+- [x] Kafka Consumer
+- [x] 마이크로 배치 (5000건 or 5초)
+- [x] jOOQ 배치 삽입
+- [x] ON CONFLICT DO NOTHING
 
 ### Phase 5: Bulk
 
-- [ ] REST API (Job 생성/조회)
-- [ ] MinIO 파일 처리
-- [ ] Orchestrator (청크 생성)
-- [ ] bulk.send.task Kafka 발행
+- [x] REST API (Job 생성/조회)
+- [x] MinIO 파일 처리
+- [x] Orchestrator (청크 생성, @Scheduled 폴링)
+- [x] bulk.send.task Kafka 발행
+- [x] published_chunks / retry_count 기반 실패 복구
 
 ### Phase 6: 마무리
 
@@ -321,5 +368,5 @@ Phase 4 (CDR)  Phase 5 (Bulk)
 
 ---
 
-*문서 버전: 2.0*
-*최종 수정일: 2025-01-28*
+*문서 버전: 3.0*
+*최종 수정일: 2025-01-29*

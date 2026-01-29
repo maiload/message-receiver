@@ -60,11 +60,15 @@ Client ──gRPC──▶ Receiver
 #### 대량(Bulk) 메시지
 
 ```
-Client ──REST──▶ Receiver (Job 제출)
-                    └─ MinIO (파일 업로드)
-                           └─ Orchestrator ──▶ Kafka (bulk.send.task)
-                                                   └─ Worker ──▶ Gateway
-                                                                     └─ Kafka (cdr.events)
+Client ──REST──▶ Receiver (Job 등록 → DB 저장)
+
+Orchestrator (@Scheduled 폴링)
+    ├─ DB (PENDING Job 조회)
+    ├─ MinIO (파일 읽기, 스트리밍)
+    └─ Kafka (bulk.send.task, 청크 단위 발행)
+           └─ Worker ──▶ Gateway
+                             └─ Kafka (cdr.events)
+                                    └─ CDR Writer ──▶ DB
 ```
 
 ### 2.2 배포 단위
@@ -143,16 +147,48 @@ message SubmitResponse {
 }
 ```
 
+#### GetReceiptStatus Request
+
+```protobuf
+message GetReceiptStatusRequest {
+  string customer_id = 1;                    // 고객 ID (필수)
+  string receipt_id = 2;                     // 영수증 ID (필수)
+}
+```
+
+#### GetReceiptStatus Response
+
+```protobuf
+message GetReceiptStatusResponse {
+  string receipt_id = 1;
+  string customer_message_id = 2;
+  DeliveryStatus status = 3;
+  string fail_code = 4;
+  string fail_reason = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+  google.protobuf.Timestamp sent_at = 7;
+  google.protobuf.Timestamp delivered_at = 8;
+}
+
+enum DeliveryStatus {
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  SENT = 1;
+  FAILED = 2;
+}
+```
+
 #### gRPC 에러 코드
 
 | gRPC Status | 조건 |
 |-------------|------|
-| `INVALID_ARGUMENT` | 필수 필드 누락, 포맷 오류 |
-| `UNAUTHENTICATED` | API Key 누락/유효하지 않음 |
+| `UNAUTHENTICATED` | API Key 누락/유효하지 않음, 만료 |
 | `PERMISSION_DENIED` | customerId 불일치 |
+| `INVALID_ARGUMENT` | 필수 필드 누락, 포맷 오류, 유효하지 않은 템플릿 |
+| `NOT_FOUND` | 템플릿/영수증 없음 |
 | `RESOURCE_EXHAUSTED` | Rate limit 초과 |
 | `ALREADY_EXISTS` | 멱등 키 중복 |
-| `UNAVAILABLE` | 인프라 일시 장애 |
+| `UNAVAILABLE` | 인프라 일시 장애 (Redis, MQ, Kafka, DB, Gateway) |
+| `INTERNAL` | 예상치 못한 서버 오류 |
 
 ### 3.3 REST API (Bulk)
 
@@ -169,8 +205,17 @@ X-API-Key: {api-key}
   "customerId": "cust-001",
   "templateId": "tpl-welcome-v1",
   "objectKey": "cust-001/2025/01/28/abc123.jsonl.gz",
-  "scheduledAt": "2025-01-28T10:00:00Z",
+  "scheduledAt": "2025-01-28T10:00:00",
   "callbackUrl": "https://client.example.com/webhook/bulk"
+}
+```
+
+응답 (201 Created):
+
+```json
+{
+  "jobId": "job-uuid-12345",
+  "createdAt": "2025-01-28T09:00:00"
 }
 ```
 
@@ -178,6 +223,7 @@ X-API-Key: {api-key}
 
 ```
 GET /bulk/jobs/{jobId}
+X-API-Key: {api-key}
 ```
 
 ```json
@@ -188,9 +234,9 @@ GET /bulk/jobs/{jobId}
   "totalCount": 50000,
   "successCount": 45000,
   "failCount": 1000,
-  "pendingCount": 4000,
-  "createdAt": "2025-01-28T09:00:00Z",
-  "startedAt": "2025-01-28T10:00:00Z"
+  "createdAt": "2025-01-28T09:00:00",
+  "startedAt": "2025-01-28T10:00:00",
+  "completedAt": null
 }
 ```
 
@@ -200,10 +246,12 @@ GET /bulk/jobs/{jobId}
 
 ### 4.1 PostgreSQL
 
+모든 테이블은 `messaging` 스키마에 생성됩니다.
+
 #### customers 테이블
 
 ```sql
-CREATE TABLE customers (
+CREATE TABLE messaging.customers (
     id                  BIGSERIAL PRIMARY KEY,
     customer_id         VARCHAR(64) NOT NULL UNIQUE,
     name                VARCHAR(128) NOT NULL,
@@ -228,10 +276,10 @@ CREATE TABLE customers (
 #### templates 테이블
 
 ```sql
-CREATE TABLE templates (
+CREATE TABLE messaging.templates (
     id                  BIGSERIAL PRIMARY KEY,
     template_id         VARCHAR(64) NOT NULL UNIQUE,
-    customer_id         VARCHAR(64) NOT NULL REFERENCES customers(customer_id),
+    customer_id         VARCHAR(64) NOT NULL REFERENCES messaging.customers(customer_id),
     channel             VARCHAR(16) NOT NULL,  -- SMS, LMS, MMS
     name                VARCHAR(128) NOT NULL,
     content             TEXT NOT NULL,         -- {{name}} 형태
@@ -245,12 +293,13 @@ CREATE TABLE templates (
 #### cdr_records 테이블
 
 ```sql
-CREATE TABLE cdr_records (
+CREATE TABLE messaging.cdr_records (
     id                    BIGSERIAL PRIMARY KEY,
     customer_id           VARCHAR(64) NOT NULL,
     receipt_id            VARCHAR(64) NOT NULL,
     customer_message_id   VARCHAR(128) NOT NULL,
     channel               VARCHAR(16) NOT NULL,
+    send_type             VARCHAR(16) NOT NULL DEFAULT 'REALTIME',
     status                VARCHAR(32) NOT NULL,
     provider_message_id   VARCHAR(128),
     recipient_hash        VARCHAR(64) NOT NULL,  -- SHA-256
@@ -270,7 +319,7 @@ CREATE TABLE cdr_records (
 #### bulk_jobs 테이블
 
 ```sql
-CREATE TABLE bulk_jobs (
+CREATE TABLE messaging.bulk_jobs (
     id                    BIGSERIAL PRIMARY KEY,
     job_id                VARCHAR(64) NOT NULL UNIQUE,
     customer_id           VARCHAR(64) NOT NULL,
@@ -280,6 +329,8 @@ CREATE TABLE bulk_jobs (
     total_count           INT NOT NULL DEFAULT 0,
     success_count         INT NOT NULL DEFAULT 0,
     fail_count            INT NOT NULL DEFAULT 0,
+    published_chunks      INT NOT NULL DEFAULT 0,
+    retry_count           INT NOT NULL DEFAULT 0,
     scheduled_at          TIMESTAMP,
     callback_url          VARCHAR(512),
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -323,11 +374,12 @@ CREATE TABLE bulk_jobs (
 {
   "eventId": "evt-uuid-11111",
   "eventType": "DELIVERY_RESULT",
-  "occurredAt": "2025-01-28T09:00:05Z",
+  "occurredAt": "2025-01-28T09:00:05",
   "payload": {
     "customerId": "cust-001",
     "receiptId": "receipt-uuid-67890",
     "customerMessageId": "msg-12345",
+    "sendType": "REALTIME",
     "channel": "SMS",
     "status": "SENT",
     "recipientHash": "a1b2c3d4e5f6...",
@@ -401,16 +453,28 @@ CREATE TABLE bulk_jobs (
 
 ## 6. 에러 코드 체계
 
-| 코드 | 설명 | HTTP | gRPC |
-|------|------|------|------|
-| `INVALID_REQUEST` | 요청 형식 오류 | 400 | INVALID_ARGUMENT |
-| `INVALID_RECIPIENT` | 수신자 번호 오류 | 400 | INVALID_ARGUMENT |
-| `TEMPLATE_NOT_FOUND` | 템플릿 없음 | 404 | NOT_FOUND |
-| `RATE_LIMIT_EXCEEDED` | TPS 제한 초과 | 429 | RESOURCE_EXHAUSTED |
-| `IDEMPOTENCY_CONFLICT` | 멱등 키 중복 | 409 | ALREADY_EXISTS |
-| `SERVICE_UNAVAILABLE` | 인프라 장애 | 503 | UNAVAILABLE |
+| 코드 | 분류 | 설명 | Retryable | gRPC |
+|------|------|------|-----------|------|
+| `A001` | Authentication | 인증 실패 | N | UNAUTHENTICATED |
+| `A002` | Authentication | 권한 없음 (customerId 불일치) | N | PERMISSION_DENIED |
+| `A003` | Authentication | API Key 만료 | N | UNAUTHENTICATED |
+| `V001` | Validation | 요청 형식 오류 | N | INVALID_ARGUMENT |
+| `V002` | Validation | 수신자 번호 오류 | N | INVALID_ARGUMENT |
+| `V003` | Validation | 유효하지 않은 템플릿 | N | INVALID_ARGUMENT |
+| `V004` | Validation | 템플릿 없음 | N | NOT_FOUND |
+| `V005` | Validation | 영수증 없음 | N | NOT_FOUND |
+| `V006` | Validation | Job 없음 | N | NOT_FOUND |
+| `P001` | Policy | TPS 제한 초과 | Y | RESOURCE_EXHAUSTED |
+| `P002` | Policy | 멱등 키 중복 | N | ALREADY_EXISTS |
+| `I001` | Infrastructure | Redis 연결 실패 | Y | UNAVAILABLE |
+| `I002` | Infrastructure | MQ 발행 실패 | Y | UNAVAILABLE |
+| `I003` | Infrastructure | Kafka 발행 실패 | Y | UNAVAILABLE |
+| `I004` | Infrastructure | DB 연결 실패 | Y | UNAVAILABLE |
+| `G001` | Gateway | 게이트웨이 타임아웃 | Y | UNAVAILABLE |
+| `G002` | Gateway | 게이트웨이 5xx | Y | UNAVAILABLE |
+| `G003` | Gateway | 게이트웨이 4xx (영구 실패) | N | INTERNAL |
 
 ---
 
-*문서 버전: 2.0*
-*최종 수정일: 2025-01-28*
+*문서 버전: 3.0*
+*최종 수정일: 2025-01-29*
