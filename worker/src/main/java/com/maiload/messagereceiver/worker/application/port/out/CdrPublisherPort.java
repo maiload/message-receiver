@@ -1,6 +1,6 @@
 package com.maiload.messagereceiver.worker.application.port.out;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 public interface CdrPublisherPort {
 
@@ -9,7 +9,7 @@ public interface CdrPublisherPort {
     record CdrEvent(
             String eventId,
             String eventType,
-            Instant occurredAt,
+            LocalDateTime occurredAt,
             String customerId,
             String receiptId,
             String customerMessageId,

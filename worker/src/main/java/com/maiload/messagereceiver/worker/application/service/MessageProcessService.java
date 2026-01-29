@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
 
 @Slf4j
@@ -63,7 +63,7 @@ public class MessageProcessService implements MessageProcessPort {
         return new CdrPublisherPort.CdrEvent(
                 IdGenerator.uuid(),
                 "DELIVERY_RESULT",
-                Instant.now(),
+                LocalDateTime.now(),
                 process.customerId(),
                 process.receiptId(),
                 process.customerMessageId(),
