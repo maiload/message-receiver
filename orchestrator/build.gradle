@@ -11,7 +11,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
     // Kafka
-    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
     // MinIO
     implementation 'io.minio:minio:8.6.0'
@@ -27,33 +27,51 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:kafka'
-    testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:minio'
 }
 
 jooq {
-    version = '3.20.10'
+    version = '3.19.29'
     edition = nu.studer.gradle.jooq.JooqEdition.OSS
 
     configurations {
         main {
-            generateSchemaSourceOnCompilation = true
+            generateSchemaSourceOnCompilation = false
 
             generationTool {
                 logging = org.jooq.meta.jaxb.Logging.WARN
                 jdbc {
                     driver = 'org.postgresql.Driver'
-                    url = 'jdbc:postgresql://localhost:5432/messagereceiver'
-                    user = 'messagereceiver'
-                    password = 'messagereceiver'
+                    url = 'jdbc:postgresql://localhost:5432/message_receiver'
+                    user = 'maiload'
+                    password = 'maiload'
                 }
                 generator {
                     name = 'org.jooq.codegen.DefaultGenerator'
                     database {
                         name = 'org.jooq.meta.postgres.PostgresDatabase'
-                        inputSchema = 'public'
+                        inputSchema = 'messaging'
+                        forcedTypes {
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.JobStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.bulk_jobs\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.MessageStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.SendType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.send_type'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.ChannelType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.channel'
+                            }
+                        }
                     }
                     generate {
                         deprecated = false
