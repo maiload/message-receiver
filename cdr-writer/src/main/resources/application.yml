@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: cdr-writer
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/message_receiver
+    username: maiload
+    password: maiload
+
+  kafka:
+    bootstrap-servers: localhost:9094
+    consumer:
+      group-id: cdr-writer
+      auto-offset-reset: earliest
+      max-poll-records: 5000
+      properties:
+        fetch.max.wait.ms: 5000
+    listener:
+      type: batch
+      ack-mode: batch
+
+server:
+  port: 8083
+
+cdr-writer:
+  kafka:
+    topic: cdr.events
