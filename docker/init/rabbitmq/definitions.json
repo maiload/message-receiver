@@ -1,6 +1,22 @@
 {
+  "users": [
+    {
+      "name": "maiload",
+      "password": "maiload",
+      "tags": ["administrator"]
+    }
+  ],
   "vhosts": [
     { "name": "/" }
+  ],
+  "permissions": [
+    {
+      "user": "maiload",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
   ],
   "exchanges": [
     {
