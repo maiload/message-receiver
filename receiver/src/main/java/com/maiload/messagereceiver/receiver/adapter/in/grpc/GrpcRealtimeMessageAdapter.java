@@ -5,6 +5,7 @@ import com.maiload.messagereceiver.common.exception.BaseException;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.grpc.GetReceiptStatusRequest;
 import com.maiload.messagereceiver.grpc.GetReceiptStatusResponse;
+import com.maiload.messagereceiver.grpc.MessageStatus;
 import com.maiload.messagereceiver.grpc.RealtimeMessageServiceGrpc;
 import com.maiload.messagereceiver.grpc.SubmitRequest;
 import com.maiload.messagereceiver.grpc.SubmitResponse;
@@ -15,7 +16,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -51,8 +53,27 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
 
     @Override
     public void getReceiptStatus(GetReceiptStatusRequest request, StreamObserver<GetReceiptStatusResponse> responseObserver) {
-        // TODO: CDR Writer가 DB에 상태 저장 후 구현 (Phase 3 이후)
-        responseObserver.onError(Status.UNIMPLEMENTED.asRuntimeException());
+        try {
+            String authenticatedCustomerId = AuthenticationInterceptor.CUSTOMER_ID_CTX_KEY.get();
+            if (!request.getCustomerId().equals(authenticatedCustomerId)) {
+                responseObserver.onError(Status.PERMISSION_DENIED
+                        .withDescription("Customer ID mismatch")
+                        .asRuntimeException());
+                return;
+            }
+
+            RealtimeMessagePort.ReceiptStatus result = realtimeMessagePort.getReceiptStatus(
+                    request.getCustomerId(), request.getReceiptId());
+
+            responseObserver.onNext(toReceiptStatusResponse(result));
+            responseObserver.onCompleted();
+        } catch (BaseException e) {
+            log.warn("Business exception: code={}, message={}", e.getErrorCode().getCode(), e.getMessage());
+            responseObserver.onError(toGrpcStatus(e.getErrorCode()).withDescription(e.getMessage()).asRuntimeException());
+        } catch (Exception e) {
+            log.error("Unexpected exception", e);
+            responseObserver.onError(Status.INTERNAL.withDescription("Internal server error").asRuntimeException());
+        }
     }
 
     private RealtimeMessagePort.Submit toSubmit(SubmitRequest request) {
@@ -77,7 +98,36 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
                 .build();
     }
 
-    private Timestamp toTimestamp(Instant instant) {
+    private GetReceiptStatusResponse toReceiptStatusResponse(RealtimeMessagePort.ReceiptStatus result) {
+        var builder = GetReceiptStatusResponse.newBuilder();
+        builder.setReceiptId(result.receiptId())
+                .setCustomerMessageId(result.customerMessageId())
+                .setStatus(toMessageStatus(result.status()))
+                .setAcceptedAt(toTimestamp(result.acceptedAt()));
+
+        if (result.failCode() != null) builder.setFailCode(result.failCode());
+        if (result.failReason() != null) builder.setFailReason(result.failReason());
+        if (result.sentAt() != null) builder.setSentAt(toTimestamp(result.sentAt()));
+        if (result.finalizedAt() != null) builder.setDeliveredAt(toTimestamp(result.finalizedAt()));
+
+        return builder.build();
+    }
+
+    private MessageStatus toMessageStatus(String status) {
+        return switch (status) {
+            case "RECEIVED" -> MessageStatus.RECEIVED;
+            case "QUEUED" -> MessageStatus.QUEUED;
+            case "PROCESSING" -> MessageStatus.PROCESSING;
+            case "SENT" -> MessageStatus.SENT;
+            case "DELIVERED" -> MessageStatus.DELIVERED;
+            case "FAILED" -> MessageStatus.FAILED;
+            case "EXPIRED" -> MessageStatus.EXPIRED;
+            default -> MessageStatus.MESSAGE_STATUS_UNSPECIFIED;
+        };
+    }
+
+    private Timestamp toTimestamp(LocalDateTime localDateTime) {
+        var instant = localDateTime.atZone(ZoneId.systemDefault()).toInstant();
         return Timestamp.newBuilder()
                 .setSeconds(instant.getEpochSecond())
                 .setNanos(instant.getNano())
@@ -92,7 +142,7 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
                     Status.PERMISSION_DENIED;
             case INVALID_REQUEST, INVALID_RECIPIENT, INVALID_TEMPLATE ->
                     Status.INVALID_ARGUMENT;
-            case TEMPLATE_NOT_FOUND ->
+            case TEMPLATE_NOT_FOUND, RECEIPT_NOT_FOUND ->
                     Status.NOT_FOUND;
             case RATE_LIMIT_EXCEEDED ->
                     Status.RESOURCE_EXHAUSTED;

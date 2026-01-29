@@ -1,6 +1,6 @@
 package com.maiload.messagereceiver.receiver.application.port.out;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -19,6 +19,6 @@ public interface RealtimeQueuePort {
             Map<String, String> vars,
             Integer ttlSeconds,
             List<String> mediaUrls,
-            Instant acceptedAt
+            LocalDateTime acceptedAt
     ) {}
 }

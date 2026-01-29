@@ -1,12 +1,14 @@
 package com.maiload.messagereceiver.receiver.application.port.in;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 public interface RealtimeMessagePort {
 
     SubmitResult submit(Submit submit);
+
+    ReceiptStatus getReceiptStatus(String customerId, String receiptId);
 
     record Submit(
             String customerId,
@@ -22,7 +24,18 @@ public interface RealtimeMessagePort {
 
     record SubmitResult(
             String receiptId,
-            Instant acceptedAt,
+            LocalDateTime acceptedAt,
             boolean idempotencyHit
+    ) {}
+
+    record ReceiptStatus(
+            String receiptId,
+            String customerMessageId,
+            String status,
+            String failCode,
+            String failReason,
+            LocalDateTime acceptedAt,
+            LocalDateTime sentAt,
+            LocalDateTime finalizedAt
     ) {}
 }

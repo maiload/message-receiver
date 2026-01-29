@@ -17,6 +17,7 @@ public enum ErrorCode {
     INVALID_RECIPIENT("V002", false),
     INVALID_TEMPLATE("V003", false),
     TEMPLATE_NOT_FOUND("V004", false),
+    RECEIPT_NOT_FOUND("V005", false),
 
     // Policy
     RATE_LIMIT_EXCEEDED("P001", true),

@@ -1,11 +1,13 @@
 package com.maiload.messagereceiver.receiver.application.service;
 
+import com.maiload.messagereceiver.common.exception.DomainException;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.common.exception.PolicyViolationException;
 import com.maiload.messagereceiver.common.exception.ValidationException;
 import com.maiload.messagereceiver.common.util.IdGenerator;
 import com.maiload.messagereceiver.common.util.PhoneNumberUtils;
 import com.maiload.messagereceiver.receiver.application.port.in.RealtimeMessagePort;
+import com.maiload.messagereceiver.receiver.application.port.out.CdrRecordRepositoryPort;
 import com.maiload.messagereceiver.receiver.application.port.out.IdempotencyPort;
 import com.maiload.messagereceiver.receiver.application.port.out.RateLimitPort;
 import com.maiload.messagereceiver.receiver.application.port.out.RealtimeQueuePort;
@@ -13,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
 
@@ -26,6 +28,7 @@ public class RealtimeMessageService implements RealtimeMessagePort {
     private final IdempotencyPort idempotencyPort;
     private final RateLimitPort rateLimitPort;
     private final RealtimeQueuePort realtimeQueuePort;
+    private final CdrRecordRepositoryPort cdrRecordRepositoryPort;
 
     @Override
     public SubmitResult submit(Submit submit) {
@@ -43,10 +46,10 @@ public class RealtimeMessageService implements RealtimeMessagePort {
         );
 
         if (existingReceiptId.isPresent()) {
-            return new SubmitResult(existingReceiptId.get(), Instant.now(), true);
+            return new SubmitResult(existingReceiptId.get(), LocalDateTime.now(), true);
         }
 
-        Instant acceptedAt = Instant.now();
+        LocalDateTime acceptedAt = LocalDateTime.now();
         RealtimeQueuePort.Payload payload = new RealtimeQueuePort.Payload(
                 receiptId,
                 submit.customerId(),
@@ -64,6 +67,24 @@ public class RealtimeMessageService implements RealtimeMessagePort {
         realtimeQueuePort.publish(payload);
 
         return new SubmitResult(receiptId, acceptedAt, false);
+    }
+
+    @Override
+    public ReceiptStatus getReceiptStatus(String customerId, String receiptId) {
+        CdrRecordRepositoryPort.CdrRecord record = cdrRecordRepositoryPort
+                .findByCustomerIdAndReceiptId(customerId, receiptId)
+                .orElseThrow(() -> new DomainException(ErrorCode.RECEIPT_NOT_FOUND, "Receipt not found: " + receiptId));
+
+        return new ReceiptStatus(
+                record.receiptId(),
+                record.customerMessageId(),
+                record.status(),
+                record.failCode(),
+                record.failReason(),
+                record.acceptedAt(),
+                record.sentAt(),
+                record.finalizedAt()
+        );
     }
 
     private void validate(Submit submit) {
