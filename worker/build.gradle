@@ -2,10 +2,6 @@ plugins {
     id 'org.springframework.boot'
 }
 
-ext {
-    set('springCloudVersion', '2024.0.1')
-}
-
 dependencies {
     implementation project(':common')
 
@@ -20,7 +16,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
     // Resilience
-    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.3.0'
 
     // Observability
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -29,13 +25,4 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-amqp-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:kafka'
-    testImplementation 'org.testcontainers:rabbitmq'
-}
-
-dependencyManagement {
-    imports {
-        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-    }
 }

@@ -4,18 +4,24 @@ import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.common.exception.GatewayException;
 import com.maiload.messagereceiver.common.util.IdGenerator;
 import com.maiload.messagereceiver.worker.application.port.out.GatewayPort;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class HttpGatewayAdapter implements GatewayPort {
 
+    private final CircuitBreaker gatewayCircuitBreaker;
+
     @Override
-    @CircuitBreaker(name = "gateway")
     public SendResult send(Send send) {
+        return gatewayCircuitBreaker.executeSupplier(() -> doSend(send));
+    }
+
+    private SendResult doSend(Send send) {
         log.info("[Mock Gateway] Sending message: receiptId={}, channel={}, recipient={}",
                 send.receiptId(), send.channel(), send.recipient());
 

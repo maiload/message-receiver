@@ -26,18 +26,3 @@ worker:
       routing-keys: retry.5s,retry.30s,retry.2m
   kafka:
     cdr-topic: cdr.events
-
-resilience4j:
-  circuitbreaker:
-    instances:
-      gateway:
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
-        sliding-window-size: 100
-        minimum-number-of-calls: 20
-        permitted-number-of-calls-in-half-open-state: 10
-  timelimiter:
-    instances:
-      gateway:
-        timeout-duration: 3s
-        cancel-running-future: true
