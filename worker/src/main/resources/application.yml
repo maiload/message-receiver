@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: message-worker
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: maiload
+    password: maiload
+
+  kafka:
+    bootstrap-servers: localhost:9094
+    producer:
+      acks: all
+      retries: 3
+
+server:
+  port: 8082
+
+worker:
+  rabbitmq:
+    queue: message.realtime.queue
+    exchange: message.exchange
+    dlq-routing-key: dlq
+    retry:
+      routing-keys: retry.5s,retry.30s,retry.2m
+  kafka:
+    cdr-topic: cdr.events
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      gateway:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 100
+        minimum-number-of-calls: 20
+        permitted-number-of-calls-in-half-open-state: 10
+  timelimiter:
+    instances:
+      gateway:
+        timeout-duration: 3s
+        cancel-running-future: true

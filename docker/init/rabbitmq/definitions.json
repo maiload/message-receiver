@@ -9,13 +9,6 @@
       "type": "direct",
       "durable": true,
       "auto_delete": false
-    },
-    {
-      "name": "message.dlx",
-      "vhost": "/",
-      "type": "direct",
-      "durable": true,
-      "auto_delete": false
     }
   ],
   "queues": [
@@ -23,10 +16,39 @@
       "name": "message.realtime.queue",
       "vhost": "/",
       "durable": true,
+      "auto_delete": false
+    },
+    {
+      "name": "message.realtime.retry.5s",
+      "vhost": "/",
+      "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-dead-letter-exchange": "message.dlx",
-        "x-dead-letter-routing-key": "message.realtime.dlq"
+        "x-message-ttl": 5000,
+        "x-dead-letter-exchange": "message.exchange",
+        "x-dead-letter-routing-key": "message.realtime"
+      }
+    },
+    {
+      "name": "message.realtime.retry.30s",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 30000,
+        "x-dead-letter-exchange": "message.exchange",
+        "x-dead-letter-routing-key": "message.realtime"
+      }
+    },
+    {
+      "name": "message.realtime.retry.2m",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 120000,
+        "x-dead-letter-exchange": "message.exchange",
+        "x-dead-letter-routing-key": "message.realtime"
       }
     },
     {
@@ -45,11 +67,32 @@
       "routing_key": "message.realtime"
     },
     {
-      "source": "message.dlx",
+      "source": "message.exchange",
+      "vhost": "/",
+      "destination": "message.realtime.retry.5s",
+      "destination_type": "queue",
+      "routing_key": "retry.5s"
+    },
+    {
+      "source": "message.exchange",
+      "vhost": "/",
+      "destination": "message.realtime.retry.30s",
+      "destination_type": "queue",
+      "routing_key": "retry.30s"
+    },
+    {
+      "source": "message.exchange",
+      "vhost": "/",
+      "destination": "message.realtime.retry.2m",
+      "destination_type": "queue",
+      "routing_key": "retry.2m"
+    },
+    {
+      "source": "message.exchange",
       "vhost": "/",
       "destination": "message.realtime.dlq",
       "destination_type": "queue",
-      "routing_key": "message.realtime.dlq"
+      "routing_key": "dlq"
     }
   ]
 }
