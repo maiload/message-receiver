@@ -23,9 +23,6 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.kafka:spring-kafka-test'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:kafka'
-    testImplementation 'org.testcontainers:postgresql'
 }
 
 jooq {
@@ -49,6 +46,28 @@ jooq {
                     database {
                         name = 'org.jooq.meta.postgres.PostgresDatabase'
                         inputSchema = 'messaging'
+                        forcedTypes {
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.JobStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.bulk_jobs\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.MessageStatus'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.status'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.SendType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.send_type'
+                            }
+                            forcedType {
+                                userType = 'com.maiload.messagereceiver.common.domain.ChannelType'
+                                enumConverter = true
+                                includeExpression = 'messaging\\.cdr_records\\.channel'
+                            }
+                        }
                     }
                     generate {
                         deprecated = false
