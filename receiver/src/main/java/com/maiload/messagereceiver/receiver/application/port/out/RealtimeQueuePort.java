@@ -1,5 +1,8 @@
 package com.maiload.messagereceiver.receiver.application.port.out;
 
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.SendType;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +15,8 @@ public interface RealtimeQueuePort {
             String receiptId,
             String customerId,
             String customerMessageId,
-            String channel,
+            SendType sendType,
+            ChannelType channel,
             String recipient,
             String templateId,
             String content,

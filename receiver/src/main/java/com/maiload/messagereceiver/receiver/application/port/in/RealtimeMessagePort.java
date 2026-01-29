@@ -1,5 +1,7 @@
 package com.maiload.messagereceiver.receiver.application.port.in;
 
+import com.maiload.messagereceiver.common.domain.MessageStatus;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ public interface RealtimeMessagePort {
     record ReceiptStatus(
             String receiptId,
             String customerMessageId,
-            String status,
+            MessageStatus status,
             String failCode,
             String failReason,
             LocalDateTime acceptedAt,

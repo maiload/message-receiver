@@ -5,7 +5,8 @@ import com.maiload.messagereceiver.common.exception.BaseException;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.grpc.GetReceiptStatusRequest;
 import com.maiload.messagereceiver.grpc.GetReceiptStatusResponse;
-import com.maiload.messagereceiver.grpc.MessageStatus;
+import com.maiload.messagereceiver.common.domain.MessageStatus;
+import com.maiload.messagereceiver.grpc.DeliveryStatus;
 import com.maiload.messagereceiver.grpc.RealtimeMessageServiceGrpc;
 import com.maiload.messagereceiver.grpc.SubmitRequest;
 import com.maiload.messagereceiver.grpc.SubmitResponse;
@@ -102,7 +103,7 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
         var builder = GetReceiptStatusResponse.newBuilder();
         builder.setReceiptId(result.receiptId())
                 .setCustomerMessageId(result.customerMessageId())
-                .setStatus(toMessageStatus(result.status()))
+                .setStatus(toDeliveryStatus(result.status()))
                 .setAcceptedAt(toTimestamp(result.acceptedAt()));
 
         if (result.failCode() != null) builder.setFailCode(result.failCode());
@@ -113,16 +114,11 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
         return builder.build();
     }
 
-    private MessageStatus toMessageStatus(String status) {
+    private DeliveryStatus toDeliveryStatus(MessageStatus status) {
+        if (status == null) return DeliveryStatus.DELIVERY_STATUS_UNSPECIFIED;
         return switch (status) {
-            case "RECEIVED" -> MessageStatus.RECEIVED;
-            case "QUEUED" -> MessageStatus.QUEUED;
-            case "PROCESSING" -> MessageStatus.PROCESSING;
-            case "SENT" -> MessageStatus.SENT;
-            case "DELIVERED" -> MessageStatus.DELIVERED;
-            case "FAILED" -> MessageStatus.FAILED;
-            case "EXPIRED" -> MessageStatus.EXPIRED;
-            default -> MessageStatus.MESSAGE_STATUS_UNSPECIFIED;
+            case SENT -> DeliveryStatus.SENT;
+            case FAILED -> DeliveryStatus.FAILED;
         };
     }
 

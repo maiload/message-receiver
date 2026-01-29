@@ -1,5 +1,8 @@
 package com.maiload.messagereceiver.worker.application.port.in;
 
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.SendType;
+
 import java.util.List;
 import java.util.Map;
 
@@ -11,7 +14,8 @@ public interface MessageProcessPort {
             String receiptId,
             String customerId,
             String customerMessageId,
-            String channel,
+            SendType sendType,
+            ChannelType channel,
             String recipient,
             String templateId,
             String content,

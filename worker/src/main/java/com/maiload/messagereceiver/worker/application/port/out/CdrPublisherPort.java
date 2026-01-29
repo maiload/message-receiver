@@ -1,5 +1,9 @@
 package com.maiload.messagereceiver.worker.application.port.out;
 
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.MessageStatus;
+import com.maiload.messagereceiver.common.domain.SendType;
+
 import java.time.LocalDateTime;
 
 public interface CdrPublisherPort {
@@ -13,8 +17,9 @@ public interface CdrPublisherPort {
             String customerId,
             String receiptId,
             String customerMessageId,
-            String channel,
-            String status,
+            SendType sendType,
+            ChannelType channel,
+            MessageStatus status,
             String recipientHash,
             int segments,
             long price,

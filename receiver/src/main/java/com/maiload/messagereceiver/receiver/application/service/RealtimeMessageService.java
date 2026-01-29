@@ -1,5 +1,8 @@
 package com.maiload.messagereceiver.receiver.application.service;
 
+import static com.maiload.messagereceiver.common.domain.SendType.*;
+
+import com.maiload.messagereceiver.common.domain.ChannelType;
 import com.maiload.messagereceiver.common.exception.DomainException;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.common.exception.PolicyViolationException;
@@ -17,13 +20,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class RealtimeMessageService implements RealtimeMessagePort {
-
-    private static final Set<String> VALID_MESSAGE_TYPES = Set.of("SMS", "LMS", "MMS");
 
     private final IdempotencyPort idempotencyPort;
     private final RateLimitPort rateLimitPort;
@@ -50,11 +50,13 @@ public class RealtimeMessageService implements RealtimeMessagePort {
         }
 
         LocalDateTime acceptedAt = LocalDateTime.now();
+        ChannelType channel = ChannelType.valueOf(submit.messageType().toUpperCase());
         RealtimeQueuePort.Payload payload = new RealtimeQueuePort.Payload(
                 receiptId,
                 submit.customerId(),
                 submit.customerMessageId(),
-                submit.messageType().toUpperCase(),
+                REALTIME,
+                channel,
                 PhoneNumberUtils.normalize(submit.recipient()),
                 submit.templateId(),
                 submit.content(),
@@ -94,11 +96,20 @@ public class RealtimeMessageService implements RealtimeMessagePort {
         if (!StringUtils.hasText(submit.customerMessageId())) {
             throw new ValidationException(ErrorCode.INVALID_REQUEST, "customerMessageId is required");
         }
-        if (!StringUtils.hasText(submit.messageType()) || !VALID_MESSAGE_TYPES.contains(submit.messageType().toUpperCase())) {
+        if (!StringUtils.hasText(submit.messageType()) || !isValidChannelType(submit.messageType())) {
             throw new ValidationException(ErrorCode.INVALID_REQUEST, "Invalid messageType");
         }
         if (!StringUtils.hasText(submit.recipient()) || !PhoneNumberUtils.isValid(submit.recipient())) {
             throw new ValidationException(ErrorCode.INVALID_RECIPIENT, "Invalid recipient phone number");
+        }
+    }
+
+    private boolean isValidChannelType(String messageType) {
+        try {
+            ChannelType.valueOf(messageType.toUpperCase());
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
         }
     }
 }

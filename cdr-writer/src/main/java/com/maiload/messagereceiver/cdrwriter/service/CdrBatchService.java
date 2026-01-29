@@ -1,6 +1,9 @@
 package com.maiload.messagereceiver.cdrwriter.service;
 
 import com.maiload.messagereceiver.cdrwriter.repository.CdrRecordRepository;
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.MessageStatus;
+import com.maiload.messagereceiver.common.domain.SendType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,8 +31,9 @@ public class CdrBatchService {
             String customerId,
             String receiptId,
             String customerMessageId,
-            String channel,
-            String status,
+            SendType sendType,
+            ChannelType channel,
+            MessageStatus status,
             String recipientHash,
             int segments,
             long price,

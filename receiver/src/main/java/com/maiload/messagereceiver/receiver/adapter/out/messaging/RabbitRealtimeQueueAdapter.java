@@ -1,5 +1,7 @@
 package com.maiload.messagereceiver.receiver.adapter.out.messaging;
 
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.SendType;
 import org.springframework.amqp.core.Message;
 import tools.jackson.databind.json.JsonMapper;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
@@ -54,6 +56,7 @@ public class RabbitRealtimeQueueAdapter implements RealtimeQueuePort {
                 payload.receiptId(),
                 payload.customerId(),
                 payload.customerMessageId(),
+                payload.sendType(),
                 payload.channel(),
                 payload.recipient(),
                 payload.templateId(),
@@ -69,7 +72,8 @@ public class RabbitRealtimeQueueAdapter implements RealtimeQueuePort {
             String receiptId,
             String customerId,
             String customerMessageId,
-            String channel,
+            SendType sendType,
+            ChannelType channel,
             String recipient,
             String templateId,
             String content,

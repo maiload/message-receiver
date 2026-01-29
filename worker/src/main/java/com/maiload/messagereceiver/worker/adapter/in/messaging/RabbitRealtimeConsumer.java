@@ -1,5 +1,7 @@
 package com.maiload.messagereceiver.worker.adapter.in.messaging;
 
+import com.maiload.messagereceiver.common.domain.ChannelType;
+import com.maiload.messagereceiver.common.domain.SendType;
 import com.maiload.messagereceiver.common.exception.BaseException;
 import com.maiload.messagereceiver.worker.application.port.in.MessageProcessPort;
 import lombok.RequiredArgsConstructor;
@@ -88,6 +90,7 @@ public class RabbitRealtimeConsumer {
                 dto.receiptId(),
                 dto.customerId(),
                 dto.customerMessageId(),
+                dto.sendType(),
                 dto.channel(),
                 dto.recipient(),
                 dto.templateId(),
@@ -103,7 +106,8 @@ public class RabbitRealtimeConsumer {
             String receiptId,
             String customerId,
             String customerMessageId,
-            String channel,
+            SendType sendType,
+            ChannelType channel,
             String recipient,
             String templateId,
             String content,

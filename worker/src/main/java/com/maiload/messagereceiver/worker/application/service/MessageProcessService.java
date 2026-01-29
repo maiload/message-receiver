@@ -1,5 +1,8 @@
 package com.maiload.messagereceiver.worker.application.service;
 
+import static com.maiload.messagereceiver.common.domain.MessageStatus.*;
+
+import com.maiload.messagereceiver.common.domain.MessageStatus;
 import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.common.exception.GatewayException;
 import com.maiload.messagereceiver.common.util.IdGenerator;
@@ -32,11 +35,11 @@ public class MessageProcessService implements MessageProcessPort {
         try {
             result = gatewayPort.send(toSend(process));
         } catch (GatewayException e) {
-            cdrPublisherPort.publish(toCdrEvent(process, "FAILED", null, e.getErrorCode().getCode(), e.getMessage()));
+            cdrPublisherPort.publish(toCdrEvent(process, FAILED, null, e.getErrorCode().getCode(), e.getMessage()));
             throw e;
         }
 
-        String status = result.success() ? "SENT" : "FAILED";
+        MessageStatus status = result.success() ? SENT : FAILED;
         cdrPublisherPort.publish(toCdrEvent(process, status, result.providerMessageId(), result.failCode(), result.failReason()));
 
         if (!result.success()) {
@@ -58,7 +61,7 @@ public class MessageProcessService implements MessageProcessPort {
         );
     }
 
-    private CdrPublisherPort.CdrEvent toCdrEvent(Process process, String status,
+    private CdrPublisherPort.CdrEvent toCdrEvent(Process process, MessageStatus status,
                                                    String providerMessageId, String failCode, String failReason) {
         return new CdrPublisherPort.CdrEvent(
                 IdGenerator.uuid(),
@@ -67,6 +70,7 @@ public class MessageProcessService implements MessageProcessPort {
                 process.customerId(),
                 process.receiptId(),
                 process.customerMessageId(),
+                process.sendType(),
                 process.channel(),
                 status,
                 hashRecipient(process.recipient()),

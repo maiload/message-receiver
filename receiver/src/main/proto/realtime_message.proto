@@ -46,7 +46,7 @@ message GetReceiptStatusRequest {
 message GetReceiptStatusResponse {
   string receipt_id = 1;
   string customer_message_id = 2;
-  MessageStatus status = 3;
+  DeliveryStatus status = 3;
   string fail_code = 4;
   string fail_reason = 5;
   google.protobuf.Timestamp accepted_at = 6;
@@ -54,13 +54,8 @@ message GetReceiptStatusResponse {
   google.protobuf.Timestamp delivered_at = 8;
 }
 
-enum MessageStatus {
-  MESSAGE_STATUS_UNSPECIFIED = 0;
-  RECEIVED = 1;
-  QUEUED = 2;
-  PROCESSING = 3;
-  SENT = 4;
-  DELIVERED = 5;
-  FAILED = 6;
-  EXPIRED = 7;
+enum DeliveryStatus {
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  SENT = 1;
+  FAILED = 2;
 }
