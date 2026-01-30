@@ -7,6 +7,7 @@ import com.maiload.messagereceiver.common.exception.ErrorCode;
 import com.maiload.messagereceiver.common.util.IdGenerator;
 import com.maiload.messagereceiver.receiver.application.port.in.BulkJobPort;
 import com.maiload.messagereceiver.receiver.application.port.out.BulkJobRepositoryPort;
+import com.maiload.messagereceiver.receiver.application.port.out.TemplateRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -17,9 +18,16 @@ import java.time.LocalDateTime;
 public class BulkJobService implements BulkJobPort {
 
     private final BulkJobRepositoryPort bulkJobRepositoryPort;
+    private final TemplateRepositoryPort templateRepositoryPort;
 
     @Override
     public CreateResult create(Create create) {
+        if (create.templateId() != null &&
+                !templateRepositoryPort.existsByTemplateIdAndCustomerId(create.templateId(), create.customerId())) {
+            throw new DomainException(ErrorCode.TEMPLATE_NOT_FOUND,
+                    "Template not found: " + create.templateId());
+        }
+
         String jobId = IdGenerator.uuid();
         LocalDateTime now = LocalDateTime.now();
 
