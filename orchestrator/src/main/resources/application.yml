@@ -27,3 +27,5 @@ orchestrator:
   job:
     poll-interval-ms: 5000
     chunk-size: 10000
+    lease-duration-seconds: 60
+    heartbeat-interval-ms: 20000

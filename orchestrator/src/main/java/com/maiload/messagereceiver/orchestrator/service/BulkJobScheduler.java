@@ -2,7 +2,6 @@ package com.maiload.messagereceiver.orchestrator.service;
 
 import static com.maiload.messagereceiver.common.domain.JobStatus.*;
 
-import com.maiload.messagereceiver.orchestrator.repository.BulkJobRepository;
 import com.maiload.messagereceiver.orchestrator.repository.BulkJobRepository.PendingJob;
 import com.maiload.messagereceiver.orchestrator.repository.TemplateRepository;
 import io.minio.GetObjectArgs;
@@ -19,14 +18,19 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BulkJobOrchestrationService {
+public class BulkJobScheduler {
 
-    private final BulkJobRepository bulkJobRepository;
+    private final BulkJobService bulkJobService;
     private final TemplateRepository templateRepository;
     private final MinioClient minioClient;
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -41,19 +45,46 @@ public class BulkJobOrchestrationService {
     @Value("${orchestrator.job.chunk-size}")
     private int chunkSize;
 
+    @Value("${orchestrator.job.lease-duration-seconds}")
+    private int leaseDurationSeconds;
+
+    @Value("${orchestrator.job.heartbeat-interval-ms}")
+    private long heartbeatIntervalMs;
+
+    private final String instanceId = UUID.randomUUID().toString().substring(0, 8);
+
+    private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "lease-heartbeat");
+        t.setDaemon(true);
+        return t;
+    });
+
     @Scheduled(fixedDelayString = "${orchestrator.job.poll-interval-ms}")
     public void pollAndProcess() {
-        List<PendingJob> jobs = bulkJobRepository.findPendingJobs();
+        List<PendingJob> jobs = bulkJobService.claimJobs(instanceId, leaseDurationSeconds);
 
         for (PendingJob job : jobs) {
+            ScheduledFuture<?> heartbeat = startHeartbeat(job.jobId());
             try {
                 processJob(job);
+                bulkJobService.updateStatusAndReleaseLease(job.jobId(), PUBLISHED);
             } catch (Exception e) {
                 log.error("Failed to process job: jobId={}", job.jobId(), e);
-                bulkJobRepository.updateStatus(job.jobId(), FAILED);
-                bulkJobRepository.incrementRetryCount(job.jobId());
+                bulkJobService.updateStatusAndReleaseLease(job.jobId(), FAILED);
+            } finally {
+                heartbeat.cancel(false);
             }
         }
+    }
+
+    private ScheduledFuture<?> startHeartbeat(String jobId) {
+        return heartbeatExecutor.scheduleAtFixedRate(() -> {
+            try {
+                bulkJobService.renewLease(jobId, instanceId, leaseDurationSeconds);
+            } catch (Exception e) {
+                log.warn("Failed to renew lease: jobId={}", jobId, e);
+            }
+        }, heartbeatIntervalMs, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
     }
 
     private void processJob(PendingJob job) throws Exception {
@@ -68,13 +99,10 @@ public class BulkJobOrchestrationService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Template not found: " + job.templateId()));
 
-        bulkJobRepository.updateStatus(job.jobId(), PROCESSING);
-
         int totalLines = 0;
         int chunkIndex = resumeFrom;
         int linesInCurrentChunk = 0;
 
-        // MinIO에서 JSONL.gz 파일을 스트리밍으로 읽으며 chunkSize 단위로 Kafka 발행
         try (InputStream is = minioClient.getObject(
                 GetObjectArgs.builder().bucket(bucket).object(job.objectKey()).build());
              BufferedReader reader = new BufferedReader(new InputStreamReader(new GZIPInputStream(is)))) {
@@ -82,7 +110,6 @@ public class BulkJobOrchestrationService {
             while (reader.readLine() != null) {
                 totalLines++;
 
-                // 이미 발행된 라인 건너뛰기
                 if (totalLines <= skipLines) continue;
 
                 linesInCurrentChunk++;
@@ -91,22 +118,20 @@ public class BulkJobOrchestrationService {
                     int startOffset = chunkIndex * chunkSize;
                     publishChunk(job, template, chunkIndex, startOffset, startOffset + chunkSize);
                     chunkIndex++;
-                    bulkJobRepository.updatePublishedChunks(job.jobId(), chunkIndex);
+                    bulkJobService.updatePublishedChunks(job.jobId(), chunkIndex);
                     linesInCurrentChunk = 0;
                 }
             }
 
-            // 나머지 라인 처리
             if (linesInCurrentChunk > 0) {
                 int startOffset = chunkIndex * chunkSize;
                 publishChunk(job, template, chunkIndex, startOffset, startOffset + linesInCurrentChunk);
                 chunkIndex++;
-                bulkJobRepository.updatePublishedChunks(job.jobId(), chunkIndex);
+                bulkJobService.updatePublishedChunks(job.jobId(), chunkIndex);
             }
         }
 
-        bulkJobRepository.updateTotalCount(job.jobId(), totalLines);
-        bulkJobRepository.updateStatus(job.jobId(), PUBLISHED);
+        bulkJobService.updateTotalCount(job.jobId(), totalLines);
 
         log.info("Bulk job published: jobId={}, totalLines={}, chunks={}",
                 job.jobId(), totalLines, chunkIndex);
