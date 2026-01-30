@@ -14,8 +14,7 @@ public interface BulkJobPort {
             String customerId,
             String templateId,
             String objectKey,
-            LocalDateTime scheduledAt,
-            String callbackUrl
+            LocalDateTime scheduledAt
     ) {}
 
     record CreateResult(

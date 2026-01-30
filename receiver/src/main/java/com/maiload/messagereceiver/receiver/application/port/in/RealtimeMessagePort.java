@@ -37,7 +37,6 @@ public interface RealtimeMessagePort {
             String failCode,
             String failReason,
             LocalDateTime acceptedAt,
-            LocalDateTime sentAt,
-            LocalDateTime finalizedAt
+            LocalDateTime sentAt
     ) {}
 }

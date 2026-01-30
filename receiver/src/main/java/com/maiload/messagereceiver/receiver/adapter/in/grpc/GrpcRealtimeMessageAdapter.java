@@ -32,6 +32,13 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
     @Override
     public void submit(SubmitRequest request, StreamObserver<SubmitResponse> responseObserver) {
         try {
+            if (request.getCustomerId().isEmpty()) {
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                        .withDescription("customer_id is required")
+                        .asRuntimeException());
+                return;
+            }
+
             String authenticatedCustomerId = AuthenticationInterceptor.CUSTOMER_ID_CTX_KEY.get();
             if (!request.getCustomerId().equals(authenticatedCustomerId)) {
                 responseObserver.onError(Status.PERMISSION_DENIED
@@ -109,7 +116,6 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
         if (result.failCode() != null) builder.setFailCode(result.failCode());
         if (result.failReason() != null) builder.setFailReason(result.failReason());
         if (result.sentAt() != null) builder.setSentAt(toTimestamp(result.sentAt()));
-        if (result.finalizedAt() != null) builder.setDeliveredAt(toTimestamp(result.finalizedAt()));
 
         return builder.build();
     }

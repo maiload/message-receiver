@@ -34,11 +34,10 @@ public class BulkJobController {
     record CreateJobRequest(
             String templateId,
             @NotBlank String objectKey,
-            LocalDateTime scheduledAt,
-            String callbackUrl
+            LocalDateTime scheduledAt
     ) {
         BulkJobPort.Create toCreate(String customerId) {
-            return new BulkJobPort.Create(customerId, templateId, objectKey, scheduledAt, callbackUrl);
+            return new BulkJobPort.Create(customerId, templateId, objectKey, scheduledAt);
         }
     }
 

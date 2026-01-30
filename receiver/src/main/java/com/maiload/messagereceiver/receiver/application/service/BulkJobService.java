@@ -31,7 +31,6 @@ public class BulkJobService implements BulkJobPort {
                 PENDING,
                 0, 0, 0,
                 create.scheduledAt(),
-                create.callbackUrl(),
                 now, null, null
         ));
 

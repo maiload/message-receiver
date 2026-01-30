@@ -21,7 +21,6 @@ public interface BulkJobRepositoryPort {
             int successCount,
             int failCount,
             LocalDateTime scheduledAt,
-            String callbackUrl,
             LocalDateTime createdAt,
             LocalDateTime startedAt,
             LocalDateTime completedAt

@@ -84,8 +84,7 @@ public class RealtimeMessageService implements RealtimeMessagePort {
                 record.failCode(),
                 record.failReason(),
                 record.acceptedAt(),
-                record.sentAt(),
-                record.finalizedAt()
+                record.sentAt()
         );
     }
 

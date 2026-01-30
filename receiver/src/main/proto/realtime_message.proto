@@ -51,7 +51,6 @@ message GetReceiptStatusResponse {
   string fail_reason = 5;
   google.protobuf.Timestamp accepted_at = 6;
   google.protobuf.Timestamp sent_at = 7;
-  google.protobuf.Timestamp delivered_at = 8;
 }
 
 enum DeliveryStatus {

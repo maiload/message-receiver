@@ -18,7 +18,15 @@ public class JooqCdrRecordRepositoryAdapter implements CdrRecordRepositoryPort {
 
     @Override
     public Optional<CdrRecord> findByCustomerIdAndReceiptId(String customerId, String receiptId) {
-        return dsl.selectFrom(CDR_RECORDS)
+        return dsl.select(
+                        CDR_RECORDS.RECEIPT_ID,
+                        CDR_RECORDS.CUSTOMER_MESSAGE_ID,
+                        CDR_RECORDS.STATUS,
+                        CDR_RECORDS.FAIL_CODE,
+                        CDR_RECORDS.FAIL_REASON,
+                        CDR_RECORDS.ACCEPTED_AT,
+                        CDR_RECORDS.SENT_AT)
+                .from(CDR_RECORDS)
                 .where(CDR_RECORDS.CUSTOMER_ID.eq(customerId)
                         .and(CDR_RECORDS.RECEIPT_ID.eq(receiptId)))
                 .fetchOptionalInto(CdrRecord.class);

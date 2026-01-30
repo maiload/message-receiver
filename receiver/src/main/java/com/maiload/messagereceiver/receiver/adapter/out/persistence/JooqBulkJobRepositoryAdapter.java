@@ -24,22 +24,33 @@ public class JooqBulkJobRepositoryAdapter implements BulkJobRepositoryPort {
                         BULK_JOBS.TEMPLATE_ID,
                         BULK_JOBS.OBJECT_KEY,
                         BULK_JOBS.STATUS,
-                        BULK_JOBS.SCHEDULED_AT,
-                        BULK_JOBS.CALLBACK_URL)
+                        BULK_JOBS.SCHEDULED_AT)
                 .values(
                         bulkJob.jobId(),
                         bulkJob.customerId(),
                         bulkJob.templateId(),
                         bulkJob.objectKey(),
                         bulkJob.status(),
-                        bulkJob.scheduledAt(),
-                        bulkJob.callbackUrl())
+                        bulkJob.scheduledAt())
                 .execute();
     }
 
     @Override
     public Optional<BulkJob> findByJobId(String jobId) {
-        return dsl.selectFrom(BULK_JOBS)
+        return dsl.select(
+                        BULK_JOBS.JOB_ID,
+                        BULK_JOBS.CUSTOMER_ID,
+                        BULK_JOBS.TEMPLATE_ID,
+                        BULK_JOBS.OBJECT_KEY,
+                        BULK_JOBS.STATUS,
+                        BULK_JOBS.TOTAL_COUNT,
+                        BULK_JOBS.SUCCESS_COUNT,
+                        BULK_JOBS.FAIL_COUNT,
+                        BULK_JOBS.SCHEDULED_AT,
+                        BULK_JOBS.CREATED_AT,
+                        BULK_JOBS.STARTED_AT,
+                        BULK_JOBS.COMPLETED_AT)
+                .from(BULK_JOBS)
                 .where(BULK_JOBS.JOB_ID.eq(jobId))
                 .fetchOptionalInto(BulkJob.class);
     }
