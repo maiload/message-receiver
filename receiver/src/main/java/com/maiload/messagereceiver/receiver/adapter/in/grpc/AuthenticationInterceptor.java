@@ -30,7 +30,6 @@ public class AuthenticationInterceptor implements ServerInterceptor {
             Metadata.Key.of("x-api-key", Metadata.ASCII_STRING_MARSHALLER);
 
     public static final Context.Key<String> CUSTOMER_ID_CTX_KEY = Context.key("customerId");
-    public static final Context.Key<Integer> RATE_LIMIT_RPS_CTX_KEY = Context.key("rateLimitRps");
 
     private final CustomerRepositoryPort customerRepositoryPort;
 
@@ -75,8 +74,7 @@ public class AuthenticationInterceptor implements ServerInterceptor {
         }
 
         Context ctx = Context.current()
-                .withValue(CUSTOMER_ID_CTX_KEY, customer.customerId())
-                .withValue(RATE_LIMIT_RPS_CTX_KEY, customer.rateLimitRps());
+                .withValue(CUSTOMER_ID_CTX_KEY, customer.customerId());
 
         return Contexts.interceptCall(ctx, call, headers, next);
     }

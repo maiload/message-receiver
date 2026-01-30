@@ -12,7 +12,6 @@ public interface CustomerRepositoryPort {
             String name,
             LocalDateTime apiKeyExpiresAt,
             int rateLimitRps,
-            int rateLimitBurst,
             String status
     ) {}
 }

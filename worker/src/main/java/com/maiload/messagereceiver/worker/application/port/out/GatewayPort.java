@@ -3,7 +3,6 @@ package com.maiload.messagereceiver.worker.application.port.out;
 import com.maiload.messagereceiver.common.domain.ChannelType;
 
 import java.util.List;
-import java.util.Map;
 
 public interface GatewayPort {
 
