@@ -8,6 +8,7 @@ import com.maiload.messagereceiver.common.domain.SendType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +23,7 @@ public class CdrBatchService {
     private final CdrRecordRepository cdrRecordRepository;
     private final BulkJobRepository bulkJobRepository;
 
+    @Transactional
     public void insertBatch(List<CdrEvent> events) {
         int inserted = cdrRecordRepository.batchInsert(events);
         log.debug("Batch insert result: total={}, inserted={}, duplicates={}",
