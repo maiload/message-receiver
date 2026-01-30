@@ -4,6 +4,7 @@ import static com.maiload.messagereceiver.common.domain.JobStatus.*;
 
 import com.maiload.messagereceiver.orchestrator.repository.BulkJobRepository;
 import com.maiload.messagereceiver.orchestrator.repository.BulkJobRepository.PendingJob;
+import com.maiload.messagereceiver.orchestrator.repository.TemplateRepository;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import java.util.zip.GZIPInputStream;
 public class BulkJobOrchestrationService {
 
     private final BulkJobRepository bulkJobRepository;
+    private final TemplateRepository templateRepository;
     private final MinioClient minioClient;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final JsonMapper jsonMapper;
@@ -61,6 +63,11 @@ public class BulkJobOrchestrationService {
         log.info("Processing bulk job: jobId={}, objectKey={}, resumeFrom={}",
                 job.jobId(), job.objectKey(), resumeFrom);
 
+        TemplateRepository.TemplateInfo template = templateRepository
+                .findByTemplateId(job.templateId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Template not found: " + job.templateId()));
+
         bulkJobRepository.updateStatus(job.jobId(), PROCESSING);
 
         int totalLines = 0;
@@ -82,7 +89,7 @@ public class BulkJobOrchestrationService {
 
                 if (linesInCurrentChunk == chunkSize) {
                     int startOffset = chunkIndex * chunkSize;
-                    publishChunk(job, chunkIndex, startOffset, startOffset + chunkSize);
+                    publishChunk(job, template, chunkIndex, startOffset, startOffset + chunkSize);
                     chunkIndex++;
                     bulkJobRepository.updatePublishedChunks(job.jobId(), chunkIndex);
                     linesInCurrentChunk = 0;
@@ -92,7 +99,7 @@ public class BulkJobOrchestrationService {
             // 나머지 라인 처리
             if (linesInCurrentChunk > 0) {
                 int startOffset = chunkIndex * chunkSize;
-                publishChunk(job, chunkIndex, startOffset, startOffset + linesInCurrentChunk);
+                publishChunk(job, template, chunkIndex, startOffset, startOffset + linesInCurrentChunk);
                 chunkIndex++;
                 bulkJobRepository.updatePublishedChunks(job.jobId(), chunkIndex);
             }
@@ -105,12 +112,15 @@ public class BulkJobOrchestrationService {
                 job.jobId(), totalLines, chunkIndex);
     }
 
-    private void publishChunk(PendingJob job, int chunkIndex, int startOffset, int endOffset) throws Exception {
+    private void publishChunk(PendingJob job, TemplateRepository.TemplateInfo template,
+                              int chunkIndex, int startOffset, int endOffset) throws Exception {
         BulkSendTask task = new BulkSendTask(
                 job.jobId(),
                 chunkIndex,
                 job.customerId(),
                 job.templateId(),
+                template.channel(),
+                template.content(),
                 new BulkSendTask.DatasetRef(job.objectKey(), startOffset, endOffset)
         );
 
@@ -126,6 +136,8 @@ public class BulkJobOrchestrationService {
             int chunkIndex,
             String customerId,
             String templateId,
+            String channel,
+            String contentTemplate,
             DatasetRef datasetRef
     ) {
         record DatasetRef(

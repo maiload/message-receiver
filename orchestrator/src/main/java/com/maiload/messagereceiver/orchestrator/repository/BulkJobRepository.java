@@ -21,9 +21,18 @@ public class BulkJobRepository {
     private static final int MAX_RETRY = 3;
 
     public List<PendingJob> findPendingJobs() {
-        return dsl.selectFrom(BULK_JOBS)
+        return dsl.select(
+                        BULK_JOBS.JOB_ID,
+                        BULK_JOBS.CUSTOMER_ID,
+                        BULK_JOBS.TEMPLATE_ID,
+                        BULK_JOBS.OBJECT_KEY,
+                        BULK_JOBS.PUBLISHED_CHUNKS,
+                        BULK_JOBS.SCHEDULED_AT)
+                .from(BULK_JOBS)
                 .where(BULK_JOBS.STATUS.in(PENDING, FAILED)
-                        .and(BULK_JOBS.RETRY_COUNT.lt(MAX_RETRY)))
+                        .and(BULK_JOBS.RETRY_COUNT.lt(MAX_RETRY))
+                        .and(BULK_JOBS.SCHEDULED_AT.isNull()
+                                .or(BULK_JOBS.SCHEDULED_AT.le(LocalDateTime.now()))))
                 .orderBy(BULK_JOBS.CREATED_AT.asc())
                 .limit(10)
                 .fetchInto(PendingJob.class);
