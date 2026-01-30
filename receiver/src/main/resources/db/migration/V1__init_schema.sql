@@ -80,13 +80,30 @@ CREATE TABLE messaging.bulk_jobs (
     published_chunks      INT NOT NULL DEFAULT 0,
     retry_count           INT NOT NULL DEFAULT 0,
     scheduled_at          TIMESTAMP,
+    locked_by             VARCHAR(64),
+    locked_until          TIMESTAMP,
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
     started_at            TIMESTAMP,
     completed_at          TIMESTAMP
 );
 
 CREATE INDEX idx_bulk_jobs_customer ON messaging.bulk_jobs(customer_id, created_at DESC);
-CREATE INDEX idx_bulk_jobs_status ON messaging.bulk_jobs(status) WHERE status IN ('PENDING', 'VALIDATING', 'SCHEDULED', 'PROCESSING');
+CREATE INDEX idx_bulk_jobs_status ON messaging.bulk_jobs(status) WHERE status IN ('PENDING', 'FAILED', 'PROCESSING');
+
+-- send_attempts 테이블 (벌크 발송 중복 방지)
+CREATE TABLE messaging.send_attempts (
+    id                    BIGSERIAL PRIMARY KEY,
+    customer_id           VARCHAR(64) NOT NULL,
+    customer_message_id   VARCHAR(128) NOT NULL,
+    receipt_id            VARCHAR(64) NOT NULL,
+    job_id                VARCHAR(64) NOT NULL,
+    status                VARCHAR(16) NOT NULL DEFAULT 'LOCKED',
+    created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT uq_send_attempt UNIQUE (customer_id, customer_message_id)
+);
+
+CREATE INDEX idx_send_attempts_job ON messaging.send_attempts(job_id);
 
 -----------------------------------------------------------
 -- 시드 데이터 (테스트용)
