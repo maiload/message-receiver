@@ -69,6 +69,7 @@ CREATE TABLE messaging.bulk_jobs (
     total_count           INT NOT NULL DEFAULT 0,
     success_count         INT NOT NULL DEFAULT 0,
     fail_count            INT NOT NULL DEFAULT 0,
+    skip_count            INT NOT NULL DEFAULT 0,
     published_chunks      INT NOT NULL DEFAULT 0,
     retry_count           INT NOT NULL DEFAULT 0,
     scheduled_at          TIMESTAMP,

@@ -125,6 +125,7 @@ public class GrpcRealtimeMessageAdapter extends RealtimeMessageServiceGrpc.Realt
         return switch (status) {
             case SENT -> DeliveryStatus.SENT;
             case FAILED -> DeliveryStatus.FAILED;
+            case SKIPPED -> DeliveryStatus.DELIVERY_STATUS_UNSPECIFIED;
         };
     }
 

@@ -25,9 +25,15 @@ public class CdrBatchService {
 
     @Transactional
     public void insertBatch(List<CdrEvent> events) {
-        int inserted = cdrRecordRepository.batchInsert(events);
-        log.debug("Batch insert result: total={}, inserted={}, duplicates={}",
-                events.size(), inserted, events.size() - inserted);
+        List<CdrEvent> cdrEvents = events.stream()
+                .filter(e -> e.status() != MessageStatus.SKIPPED)
+                .toList();
+
+        if (!cdrEvents.isEmpty()) {
+            int inserted = cdrRecordRepository.batchInsert(cdrEvents);
+            log.debug("Batch insert result: total={}, inserted={}, duplicates={}",
+                    cdrEvents.size(), inserted, cdrEvents.size() - inserted);
+        }
 
         updateBulkJobCounts(events);
     }
@@ -43,9 +49,11 @@ public class CdrBatchService {
 
             int successCount = (int) jobEvents.stream()
                     .filter(e -> e.status() == MessageStatus.SENT).count();
-            int failCount = jobEvents.size() - successCount;
+            int skipCount = (int) jobEvents.stream()
+                    .filter(e -> e.status() == MessageStatus.SKIPPED).count();
+            int failCount = jobEvents.size() - successCount - skipCount;
 
-            bulkJobRepository.incrementCounts(jobId, successCount, failCount);
+            bulkJobRepository.incrementCounts(jobId, successCount, failCount, skipCount);
         }
     }
 

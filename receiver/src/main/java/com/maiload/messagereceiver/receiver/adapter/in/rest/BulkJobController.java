@@ -53,6 +53,7 @@ public class BulkJobController {
             int totalCount,
             int successCount,
             int failCount,
+            int skipCount,
             int pendingCount,
             LocalDateTime createdAt,
             LocalDateTime startedAt,
@@ -61,8 +62,8 @@ public class BulkJobController {
         static JobStatusResponse from(BulkJobPort.JobDetail s) {
             return new JobStatusResponse(
                     s.jobId(), s.customerId(), s.status().name(),
-                    s.totalCount(), s.successCount(), s.failCount(),
-                    s.totalCount() - s.successCount() - s.failCount(),
+                    s.totalCount(), s.successCount(), s.failCount(), s.skipCount(),
+                    s.totalCount() - s.successCount() - s.failCount() - s.skipCount(),
                     s.createdAt(), s.startedAt(), s.completedAt()
             );
         }

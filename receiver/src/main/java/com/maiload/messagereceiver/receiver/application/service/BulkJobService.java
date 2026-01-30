@@ -37,7 +37,7 @@ public class BulkJobService implements BulkJobPort {
                 create.templateId(),
                 create.objectKey(),
                 PENDING,
-                0, 0, 0,
+                0, 0, 0, 0,
                 create.scheduledAt(),
                 now, null, null
         ));
@@ -61,6 +61,7 @@ public class BulkJobService implements BulkJobPort {
                 job.totalCount(),
                 job.successCount(),
                 job.failCount(),
+                job.skipCount(),
                 job.createdAt(),
                 job.startedAt(),
                 job.completedAt()

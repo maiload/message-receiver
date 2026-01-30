@@ -1,11 +1,14 @@
 package com.maiload.messagereceiver.worker.adapter.in.messaging;
 
+import static com.maiload.messagereceiver.common.domain.MessageStatus.SKIPPED;
+
 import com.maiload.messagereceiver.common.domain.ChannelType;
 import com.maiload.messagereceiver.common.domain.SendType;
 import com.maiload.messagereceiver.common.util.IdGenerator;
 import com.maiload.messagereceiver.common.util.PhoneNumberUtils;
 import com.maiload.messagereceiver.worker.adapter.out.persistence.SendAttemptRepository;
 import com.maiload.messagereceiver.worker.application.port.in.MessageProcessPort;
+import com.maiload.messagereceiver.worker.application.port.out.CdrPublisherPort;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,7 @@ import java.util.zip.GZIPInputStream;
 public class KafkaBulkConsumer {
 
     private final MessageProcessPort messageProcessPort;
+    private final CdrPublisherPort cdrPublisherPort;
     private final SendAttemptRepository sendAttemptRepository;
     private final MinioClient minioClient;
     private final JsonMapper jsonMapper;
@@ -85,6 +89,7 @@ public class KafkaBulkConsumer {
 
                     if (!acquired) {
                         skipped++;
+                        cdrPublisherPort.publish(toSkippedCdrEvent(task, lineDto, receiptId));
                         log.debug("Skipping duplicate: jobId={}, customerMessageId={}",
                                 task.jobId(), lineDto.customerMessageId());
                         continue;
@@ -123,6 +128,25 @@ public class KafkaBulkConsumer {
                 null,
                 List.of(),
                 null,
+                task.jobId()
+        );
+    }
+
+    private CdrPublisherPort.CdrEvent toSkippedCdrEvent(BulkSendTask task, BulkLineDto lineDto, String receiptId) {
+        return new CdrPublisherPort.CdrEvent(
+                IdGenerator.uuid(),
+                "DELIVERY_RESULT",
+                java.time.LocalDateTime.now(),
+                task.customerId(),
+                receiptId,
+                lineDto.customerMessageId(),
+                SendType.BULK,
+                ChannelType.valueOf(task.channel()),
+                SKIPPED,
+                null,
+                null,
+                "DUPLICATE",
+                "Duplicate customerMessageId",
                 task.jobId()
         );
     }

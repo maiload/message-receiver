@@ -20,6 +20,7 @@ public interface BulkJobRepositoryPort {
             int totalCount,
             int successCount,
             int failCount,
+            int skipCount,
             LocalDateTime scheduledAt,
             LocalDateTime createdAt,
             LocalDateTime startedAt,

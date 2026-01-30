@@ -29,6 +29,7 @@ public interface BulkJobPort {
             int totalCount,
             int successCount,
             int failCount,
+            int skipCount,
             LocalDateTime createdAt,
             LocalDateTime startedAt,
             LocalDateTime completedAt

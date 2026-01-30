@@ -46,6 +46,7 @@ public class JooqBulkJobRepositoryAdapter implements BulkJobRepositoryPort {
                         BULK_JOBS.TOTAL_COUNT,
                         BULK_JOBS.SUCCESS_COUNT,
                         BULK_JOBS.FAIL_COUNT,
+                        BULK_JOBS.SKIP_COUNT,
                         BULK_JOBS.SCHEDULED_AT,
                         BULK_JOBS.CREATED_AT,
                         BULK_JOBS.STARTED_AT,
