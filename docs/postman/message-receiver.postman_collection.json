@@ -1,0 +1,241 @@
+{
+  "info": {
+    "_postman_id": "message-receiver-collection",
+    "name": "Message Receiver",
+    "description": "Message Receiver API Collection\n\n## 환경 설정\n\n`message-receiver-local` 환경을 임포트하고 우측 상단에서 선택하세요.\n\n## Realtime (gRPC)\n\ngRPC 요청은 Collection에 포함할 수 없으므로 Postman에서 직접 생성해야 합니다.\n자세한 설정 방법은 `docs/LOCAL_TEST_GUIDE.md`의 Step 5를 참고하세요.\n\n## Bulk + Health Checks (REST)\n\n이 컬렉션의 요청을 그대로 사용하세요.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Receiver Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{receiverUrl}}/actuator/health",
+              "host": ["{{receiverUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "Worker Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{workerUrl}}/actuator/health",
+              "host": ["{{workerUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "CDR Writer Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{cdrWriterUrl}}/actuator/health",
+              "host": ["{{cdrWriterUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "Orchestrator Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orchestratorUrl}}/actuator/health",
+              "host": ["{{orchestratorUrl}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Realtime",
+      "description": "gRPC 요청은 Collection에 포함할 수 없습니다.\n\nPostman에서 New > gRPC로 직접 생성하세요.\n\n1. Enter URL: `localhost:9090`\n2. Select a method: Server Reflection으로 자동 로드\n3. Metadata 탭: `x-api-key` = `test-api-key`\n4. Message 탭: JSON 입력 후 Invoke\n\n자세한 내용은 `docs/LOCAL_TEST_GUIDE.md`의 Step 5를 참고하세요.",
+      "item": []
+    },
+    {
+      "name": "Bulk",
+      "description": "Bulk 메시지 발송 플로우: 파일 업로드 → Job 생성 → 상태 조회\n\n순서대로 실행하세요.",
+      "item": [
+        {
+          "name": "1. Upload Test File to MinIO",
+          "request": {
+            "auth": {
+              "type": "awsv4",
+              "awsv4": [
+                { "key": "accessKey", "value": "{{minioAccessKey}}", "type": "string" },
+                { "key": "secretKey", "value": "{{minioSecretKey}}", "type": "string" },
+                { "key": "region", "value": "us-east-1", "type": "string" },
+                { "key": "service", "value": "s3", "type": "string" }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/gzip"
+              }
+            ],
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            },
+            "url": {
+              "raw": "{{minioUrl}}/message-receiver/cust-001/2025/01/29/bulk-test.jsonl.gz",
+              "host": ["{{minioUrl}}"],
+              "path": ["message-receiver", "cust-001", "2025", "01", "29", "bulk-test.jsonl.gz"]
+            },
+            "description": "Bulk 테스트용 JSONL 파일을 MinIO에 업로드합니다.\n\n**사전 준비** (프로젝트 루트에서 실행):\n```bash\ncat > bulk-test.jsonl << 'EOF'\n{\"customerMessageId\": \"bulk-001\", \"recipient\": \"01012345678\", \"vars\": {\"name\": \"홍길동\", \"message\": \"대량 발송 1\"}}\n{\"customerMessageId\": \"bulk-002\", \"recipient\": \"01087654321\", \"vars\": {\"name\": \"김철수\", \"message\": \"대량 발송 2\"}}\n{\"customerMessageId\": \"bulk-003\", \"recipient\": \"01011112222\", \"vars\": {\"name\": \"이영희\", \"message\": \"대량 발송 3\"}}\nEOF\ngzip -k bulk-test.jsonl\n```\n\nBody > binary에서 `bulk-test.jsonl.gz` 파일을 선택하세요."
+          }
+        },
+        {
+          "name": "2. Create Bulk Job",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('jobId', json.jobId);",
+                  "    console.log('jobId saved:', json.jobId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"cust-001\",\n  \"templateId\": \"tpl-hello\",\n  \"objectKey\": \"cust-001/2025/01/29/bulk-test.jsonl.gz\"\n}"
+            },
+            "url": {
+              "raw": "{{receiverUrl}}/bulk/jobs",
+              "host": ["{{receiverUrl}}"],
+              "path": ["bulk", "jobs"]
+            },
+            "description": "즉시 발송 Bulk Job을 생성합니다. 응답의 `jobId`가 자동으로 Collection 변수에 저장됩니다."
+          }
+        },
+        {
+          "name": "3. Create Scheduled Bulk Job",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var now = new Date();",
+                  "now.setMinutes(now.getMinutes() + 3);",
+                  "var scheduled = now.toISOString().slice(0, 19);",
+                  "pm.collectionVariables.set('scheduledAt', scheduled);",
+                  "console.log('scheduledAt:', scheduled);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('jobId', json.jobId);",
+                  "    console.log('jobId saved:', json.jobId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateId\": \"tpl-hello\",\n  \"objectKey\": \"cust-001/2025/01/29/bulk-test.jsonl.gz\",\n  \"scheduledAt\": \"{{scheduledAt}}\"\n}"
+            },
+            "url": {
+              "raw": "{{receiverUrl}}/bulk/jobs",
+              "host": ["{{receiverUrl}}"],
+              "path": ["bulk", "jobs"]
+            },
+            "description": "3분 후 예약 발송 Bulk Job을 생성합니다.\n\nPre-request Script가 현재 시각 + 3분을 `scheduledAt`에 자동 설정합니다.\nOrchestrator는 해당 시각이 될 때까지 발송을 보류합니다."
+          }
+        },
+        {
+          "name": "4. Get Bulk Job Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{receiverUrl}}/bulk/jobs/{{jobId}}",
+              "host": ["{{receiverUrl}}"],
+              "path": ["bulk", "jobs", "{{jobId}}"]
+            },
+            "description": "`Create Bulk Job` 실행 후 자동 저장된 `{{jobId}}`를 사용합니다.\n\nOrchestrator가 5초 간격으로 폴링하므로, 잠시 후 상태가 PENDING → PROCESSING → PUBLISHED로 변경됩니다."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "scheduledAt",
+      "value": ""
+    }
+  ]
+}

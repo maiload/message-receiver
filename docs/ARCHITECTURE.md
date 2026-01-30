@@ -166,8 +166,7 @@ public interface RealtimeMessagePort {
         String failCode,
         String failReason,
         LocalDateTime acceptedAt,
-        LocalDateTime sentAt,
-        LocalDateTime finalizedAt
+        LocalDateTime sentAt
     ) {}
 }
 ```
@@ -273,9 +272,7 @@ public enum ErrorCode {
 
 ```yaml
 receiver:
-  grpc:
-    port: 9090
-    max-concurrent-calls: 1000
+  # REST: 8081 (Tomcat), gRPC: 9090 (Netty)
   rate-limit:
     default-tps: 100
   idempotency:

@@ -202,13 +202,13 @@ X-API-Key: {api-key}
 
 ```json
 {
-  "customerId": "cust-001",
   "templateId": "tpl-welcome-v1",
   "objectKey": "cust-001/2025/01/28/abc123.jsonl.gz",
-  "scheduledAt": "2025-01-28T10:00:00",
-  "callbackUrl": "https://client.example.com/webhook/bulk"
+  "scheduledAt": "2025-01-28T10:00:00"
 }
 ```
+
+> `scheduledAt`을 생략하면 즉시 발송됩니다. 값이 지정되면 해당 시각까지 발송이 보류됩니다.
 
 응답 (201 Created):
 
@@ -309,7 +309,6 @@ CREATE TABLE messaging.cdr_records (
     fail_reason           VARCHAR(256),
     accepted_at           TIMESTAMP NOT NULL,
     sent_at               TIMESTAMP,
-    finalized_at          TIMESTAMP,
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT uq_cdr_idempotency UNIQUE (customer_id, customer_message_id)
@@ -332,7 +331,6 @@ CREATE TABLE messaging.bulk_jobs (
     published_chunks      INT NOT NULL DEFAULT 0,
     retry_count           INT NOT NULL DEFAULT 0,
     scheduled_at          TIMESTAMP,
-    callback_url          VARCHAR(512),
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
     started_at            TIMESTAMP,
     completed_at          TIMESTAMP
