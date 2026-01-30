@@ -15,7 +15,7 @@ $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP_SERVER --create --if-no
 
 # Bulk 메시지 토픽
 $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP_SERVER --create --if-not-exists \
-  --topic message.bulk \
+  --topic bulk.send.task \
   --partitions 6 \
   --replication-factor 1 \
   --config retention.ms=604800000
@@ -28,7 +28,7 @@ $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP_SERVER --create --if-no
   --config retention.ms=2592000000
 
 $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP_SERVER --create --if-not-exists \
-  --topic message.bulk.dlq \
+  --topic bulk.send.task.dlq \
   --partitions 3 \
   --replication-factor 1 \
   --config retention.ms=2592000000

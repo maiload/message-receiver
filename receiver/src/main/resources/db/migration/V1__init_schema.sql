@@ -48,6 +48,7 @@ CREATE TABLE messaging.cdr_records (
     receipt_id            VARCHAR(64) NOT NULL,
     customer_message_id   VARCHAR(128) NOT NULL,
     channel               VARCHAR(16) NOT NULL,
+    send_type             VARCHAR(16) NOT NULL DEFAULT 'REALTIME',
     status                VARCHAR(32) NOT NULL,
     provider_message_id   VARCHAR(128),
     recipient_hash        VARCHAR(64) NOT NULL,
@@ -57,7 +58,6 @@ CREATE TABLE messaging.cdr_records (
     fail_reason           VARCHAR(256),
     accepted_at           TIMESTAMP NOT NULL,
     sent_at               TIMESTAMP,
-    finalized_at          TIMESTAMP,
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT uq_cdr_idempotency UNIQUE (customer_id, customer_message_id)
@@ -77,8 +77,9 @@ CREATE TABLE messaging.bulk_jobs (
     total_count           INT NOT NULL DEFAULT 0,
     success_count         INT NOT NULL DEFAULT 0,
     fail_count            INT NOT NULL DEFAULT 0,
+    published_chunks      INT NOT NULL DEFAULT 0,
+    retry_count           INT NOT NULL DEFAULT 0,
     scheduled_at          TIMESTAMP,
-    callback_url          VARCHAR(512),
     created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
     started_at            TIMESTAMP,
     completed_at          TIMESTAMP
@@ -86,3 +87,37 @@ CREATE TABLE messaging.bulk_jobs (
 
 CREATE INDEX idx_bulk_jobs_customer ON messaging.bulk_jobs(customer_id, created_at DESC);
 CREATE INDEX idx_bulk_jobs_status ON messaging.bulk_jobs(status) WHERE status IN ('PENDING', 'VALIDATING', 'SCHEDULED', 'PROCESSING');
+
+-----------------------------------------------------------
+-- 시드 데이터 (테스트용)
+-----------------------------------------------------------
+
+-- 테스트 고객 (API Key: test-api-key)
+INSERT INTO messaging.customers (customer_id, name, api_key_hash, rate_limit_rps, rate_limit_burst)
+VALUES (
+    'cust-001',
+    'Test Customer',
+    '4c806362b613f7496abf284146efd31da90e4b16169fe001841ca17290f427c4',
+    100,
+    200
+) ON CONFLICT (customer_id) DO NOTHING;
+
+-- SMS 템플릿 (변수 포함)
+INSERT INTO messaging.templates (template_id, customer_id, channel, name, content)
+VALUES (
+    'tpl-hello',
+    'cust-001',
+    'SMS',
+    '인사 템플릿',
+    '안녕하세요 {{name}}님, {{message}}'
+) ON CONFLICT (template_id) DO NOTHING;
+
+-- SMS 템플릿 (단순)
+INSERT INTO messaging.templates (template_id, customer_id, channel, name, content)
+VALUES (
+    'tpl-simple',
+    'cust-001',
+    'SMS',
+    '단순 알림',
+    '서비스 점검 안내입니다.'
+) ON CONFLICT (template_id) DO NOTHING;

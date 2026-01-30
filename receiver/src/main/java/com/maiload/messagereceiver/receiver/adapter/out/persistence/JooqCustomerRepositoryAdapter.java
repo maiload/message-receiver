@@ -18,7 +18,14 @@ public class JooqCustomerRepositoryAdapter implements CustomerRepositoryPort {
 
     @Override
     public Optional<Customer> findByApiKeyHash(String apiKeyHash) {
-        return dsl.selectFrom(CUSTOMERS)
+        return dsl.select(
+                        CUSTOMERS.CUSTOMER_ID,
+                        CUSTOMERS.NAME,
+                        CUSTOMERS.API_KEY_EXPIRES_AT,
+                        CUSTOMERS.RATE_LIMIT_RPS,
+                        CUSTOMERS.RATE_LIMIT_BURST,
+                        CUSTOMERS.STATUS)
+                .from(CUSTOMERS)
                 .where(CUSTOMERS.API_KEY_HASH.eq(apiKeyHash))
                 .fetchOptionalInto(Customer.class);
     }

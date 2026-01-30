@@ -34,11 +34,19 @@ public class AuthenticationInterceptor implements ServerInterceptor {
 
     private final CustomerRepositoryPort customerRepositoryPort;
 
+    private static final String REFLECTION_SERVICE = "grpc.reflection.";
+    private static final String HEALTH_SERVICE = "grpc.health.";
+
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> call,
             Metadata headers,
             ServerCallHandler<ReqT, RespT> next) {
+
+        String fullMethodName = call.getMethodDescriptor().getFullMethodName();
+        if (fullMethodName.startsWith(REFLECTION_SERVICE) || fullMethodName.startsWith(HEALTH_SERVICE)) {
+            return next.startCall(call, headers);
+        }
 
         String apiKey = headers.get(API_KEY_HEADER);
         if (!StringUtils.hasText(apiKey)) {
