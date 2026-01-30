@@ -98,7 +98,8 @@ public class RabbitRealtimeConsumer {
                 dto.vars(),
                 dto.ttlSeconds(),
                 dto.mediaUrls(),
-                dto.acceptedAt()
+                dto.acceptedAt(),
+                null
         );
     }
 

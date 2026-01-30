@@ -25,6 +25,7 @@ public interface CdrPublisherPort {
             long price,
             String providerMessageId,
             String failCode,
-            String failReason
+            String failReason,
+            String jobId
     ) {}
 }

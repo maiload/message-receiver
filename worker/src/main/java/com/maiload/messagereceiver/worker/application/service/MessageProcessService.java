@@ -78,7 +78,8 @@ public class MessageProcessService implements MessageProcessPort {
                 0,
                 providerMessageId,
                 failCode,
-                failReason
+                failReason,
+                process.jobId()
         );
     }
 

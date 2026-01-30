@@ -22,6 +22,7 @@ public interface MessageProcessPort {
             Map<String, String> vars,
             Integer ttlSeconds,
             List<String> mediaUrls,
-            String acceptedAt
+            String acceptedAt,
+            String jobId
     ) {}
 }
