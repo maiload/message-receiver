@@ -1,5 +1,6 @@
 package com.maiload.messagereceiver.cdrwriter.service;
 
+import com.maiload.messagereceiver.cdrwriter.repository.BulkJobRepository;
 import com.maiload.messagereceiver.cdrwriter.repository.CdrRecordRepository;
 import com.maiload.messagereceiver.common.domain.ChannelType;
 import com.maiload.messagereceiver.common.domain.MessageStatus;
@@ -10,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -17,11 +20,31 @@ import java.util.List;
 public class CdrBatchService {
 
     private final CdrRecordRepository cdrRecordRepository;
+    private final BulkJobRepository bulkJobRepository;
 
     public void insertBatch(List<CdrEvent> events) {
         int inserted = cdrRecordRepository.batchInsert(events);
         log.debug("Batch insert result: total={}, inserted={}, duplicates={}",
                 events.size(), inserted, events.size() - inserted);
+
+        updateBulkJobCounts(events);
+    }
+
+    private void updateBulkJobCounts(List<CdrEvent> events) {
+        Map<String, List<CdrEvent>> byJobId = events.stream()
+                .filter(e -> e.sendType() == SendType.BULK && e.jobId() != null)
+                .collect(Collectors.groupingBy(CdrEvent::jobId));
+
+        for (var entry : byJobId.entrySet()) {
+            String jobId = entry.getKey();
+            List<CdrEvent> jobEvents = entry.getValue();
+
+            int successCount = (int) jobEvents.stream()
+                    .filter(e -> e.status() == MessageStatus.SENT).count();
+            int failCount = jobEvents.size() - successCount;
+
+            bulkJobRepository.incrementCounts(jobId, successCount, failCount);
+        }
     }
 
     public record CdrEvent(
@@ -39,6 +62,7 @@ public class CdrBatchService {
             long price,
             String providerMessageId,
             String failCode,
-            String failReason
+            String failReason,
+            String jobId
     ) {}
 }
