@@ -4,6 +4,7 @@ import com.maiload.messagereceiver.common.domain.ChannelType;
 import com.maiload.messagereceiver.common.domain.SendType;
 import com.maiload.messagereceiver.common.util.IdGenerator;
 import com.maiload.messagereceiver.common.util.PhoneNumberUtils;
+import com.maiload.messagereceiver.worker.adapter.out.persistence.SendAttemptRepository;
 import com.maiload.messagereceiver.worker.application.port.in.MessageProcessPort;
 import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
@@ -29,6 +30,7 @@ import java.util.zip.GZIPInputStream;
 public class KafkaBulkConsumer {
 
     private final MessageProcessPort messageProcessPort;
+    private final SendAttemptRepository sendAttemptRepository;
     private final MinioClient minioClient;
     private final JsonMapper jsonMapper;
 
@@ -47,12 +49,13 @@ public class KafkaBulkConsumer {
 
         int[] result = processChunk(task);
 
-        log.info("Bulk task completed: jobId={}, chunkIndex={}, processed={}, failed={}",
-                task.jobId(), task.chunkIndex(), result[0], result[1]);
+        log.info("Bulk task completed: jobId={}, chunkIndex={}, sent={}, skipped={}, failed={}",
+                task.jobId(), task.chunkIndex(), result[0], result[1], result[2]);
     }
 
     private int[] processChunk(BulkSendTask task) {
-        int processed = 0;
+        int sent = 0;
+        int skipped = 0;
         int failed = 0;
 
         try (InputStream is = minioClient.getObject(
@@ -74,8 +77,23 @@ public class KafkaBulkConsumer {
 
                 try {
                     BulkLineDto lineDto = jsonMapper.readValue(line, BulkLineDto.class);
-                    messageProcessPort.process(toProcess(task, lineDto));
-                    processed++;
+                    String receiptId = IdGenerator.uuid();
+
+                    // 중복 발송 방지: DB 락 획득 시도
+                    boolean acquired = sendAttemptRepository.tryLock(
+                            task.customerId(), lineDto.customerMessageId(), receiptId, task.jobId());
+
+                    if (!acquired) {
+                        skipped++;
+                        log.debug("Skipping duplicate: jobId={}, customerMessageId={}",
+                                task.jobId(), lineDto.customerMessageId());
+                        continue;
+                    }
+
+                    messageProcessPort.process(toProcess(task, lineDto, receiptId));
+                    sendAttemptRepository.updateStatus(
+                            task.customerId(), lineDto.customerMessageId(), "SENT");
+                    sent++;
                 } catch (Exception e) {
                     failed++;
                     log.warn("Failed to process bulk line: jobId={}, line={}, error={}",
@@ -88,12 +106,12 @@ public class KafkaBulkConsumer {
             throw new RuntimeException("Failed to process bulk task", e);
         }
 
-        return new int[]{processed, failed};
+        return new int[]{sent, skipped, failed};
     }
 
-    private MessageProcessPort.Process toProcess(BulkSendTask task, BulkLineDto lineDto) {
+    private MessageProcessPort.Process toProcess(BulkSendTask task, BulkLineDto lineDto, String receiptId) {
         return new MessageProcessPort.Process(
-                IdGenerator.uuid(),
+                receiptId,
                 task.customerId(),
                 lineDto.customerMessageId(),
                 SendType.BULK,

@@ -2,6 +2,11 @@ spring:
   application:
     name: message-worker
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/message_receiver
+    username: maiload
+    password: maiload
+
   rabbitmq:
     host: localhost
     port: 5672
