@@ -11,12 +11,6 @@ CREATE TABLE messaging.customers (
 
     -- Rate Limit
     rate_limit_rps      INT NOT NULL DEFAULT 100,
-    rate_limit_burst    INT NOT NULL DEFAULT 200,
-
-    -- 가격 정책
-    sms_unit_price      BIGINT NOT NULL DEFAULT 20,
-    lms_unit_price      BIGINT NOT NULL DEFAULT 50,
-    mms_unit_price      BIGINT NOT NULL DEFAULT 100,
 
     status              VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
     created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -52,8 +46,6 @@ CREATE TABLE messaging.cdr_records (
     status                VARCHAR(32) NOT NULL,
     provider_message_id   VARCHAR(128),
     recipient_hash        VARCHAR(64) NOT NULL,
-    segments              INT NOT NULL DEFAULT 1,
-    price                 BIGINT NOT NULL DEFAULT 0,
     fail_code             VARCHAR(32),
     fail_reason           VARCHAR(256),
     accepted_at           TIMESTAMP NOT NULL,
@@ -110,13 +102,12 @@ CREATE INDEX idx_send_attempts_job ON messaging.send_attempts(job_id);
 -----------------------------------------------------------
 
 -- 테스트 고객 (API Key: test-api-key)
-INSERT INTO messaging.customers (customer_id, name, api_key_hash, rate_limit_rps, rate_limit_burst)
+INSERT INTO messaging.customers (customer_id, name, api_key_hash, rate_limit_rps)
 VALUES (
     'cust-001',
     'Test Customer',
     '4c806362b613f7496abf284146efd31da90e4b16169fe001841ca17290f427c4',
-    100,
-    200
+    100
 ) ON CONFLICT (customer_id) DO NOTHING;
 
 -- SMS 템플릿 (변수 포함)

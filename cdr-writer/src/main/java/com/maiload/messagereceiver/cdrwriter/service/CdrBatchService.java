@@ -60,8 +60,6 @@ public class CdrBatchService {
             ChannelType channel,
             MessageStatus status,
             String recipientHash,
-            int segments,
-            long price,
             String providerMessageId,
             String failCode,
             String failReason,
