@@ -15,6 +15,9 @@ dependencies {
     // Kafka
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
+    // MinIO
+    implementation 'io.minio:minio:8.6.0'
+
     // Resilience
     implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.3.0'
 

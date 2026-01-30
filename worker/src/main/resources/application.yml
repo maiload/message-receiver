@@ -10,6 +10,9 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9094
+    consumer:
+      group-id: message-worker
+      auto-offset-reset: earliest
     producer:
       acks: all
       retries: 3
@@ -26,3 +29,9 @@ worker:
       routing-keys: retry.5s,retry.30s,retry.2m
   kafka:
     cdr-topic: cdr.events
+    bulk-task-topic: bulk.send.task
+  minio:
+    endpoint: http://localhost:9000
+    access-key: maiload
+    secret-key: maiload123
+    bucket: message-receiver
