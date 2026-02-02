@@ -23,6 +23,8 @@ message-receiver/
   receiver   worker  cdr-writer  orchestrator
 ```
 
+Mermaid 시퀀스 다이어그램은 `docs/FLOWS.md`에 정리.
+
 ### 모듈별 아키텍처
 
 | 모듈 | 아키텍처 | 이유 |
